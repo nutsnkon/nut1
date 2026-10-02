@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>นัทอะไหร่แต่ง — ระบบขาย POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg:#FAF7F2; --surface:#FFFFFF; --surface-alt:#F1ECE3;
+    --text:#1A1918; --text-muted:#565149;
+    --primary:#1F6F5C; --primary-text:#FFFFFF;
+    --accent:#E0932E; --danger:#C0432B; --danger-bg:#FBEAE5;
+    --ok:#2EB872; --warn-bg:#FCE9CC; --warn-text:#8A5209; --info-bg:#DCEBFA; --info-text:#1F5A99;
+    --border:#E4DDD1; --radius:12px; --radius-sm:8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#17181A;--surface:#212225;--surface-alt:#2A2B2E;--text:#F5F3EF;--text-muted:#B3AEA5;
+      --primary:#3EBB9B;--primary-text:#0E1512;--danger:#E5695A;--danger-bg:#3A2320;
+      --warn-bg:#40331A;--warn-text:#F0C27A;--info-bg:#1E3247;--info-text:#8DBEF0;--border:#34353A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#17181A;--surface:#212225;--surface-alt:#2A2B2E;--text:#F5F3EF;--text-muted:#B3AEA5;
+    --primary:#3EBB9B;--primary-text:#0E1512;--danger:#E5695A;--danger-bg:#3A2320;
+    --warn-bg:#40331A;--warn-text:#F0C27A;--info-bg:#1E3247;--info-text:#8DBEF0;--border:#34353A;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:'Noto Sans Thai','Noto Sans',-apple-system,BlinkMacSystemFont,sans-serif; line-height:1.5; }
+  button { font-family:inherit; }
+  a { color:var(--info-text); }
+  :focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+  #app { display:flex; flex-direction:column; height:100vh; max-width:1100px; margin:0 auto; background:var(--bg); }
+
+  .topbar { display:flex; align-items:center; justify-content:space-between; padding:12px 16px 8px; flex-shrink:0; gap:8px; }
+  .topbar .brand { display:flex; align-items:center; gap:10px; min-width:0; }
+  .topbar .mark { width:40px; height:40px; border-radius:10px; background:var(--primary); color:var(--primary-text); display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .topbar h1 { font-size:17px; margin:0; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .topbar .sub { font-size:13px; color:var(--text-muted); font-weight:500; }
+  .status-pill { font-size:12.5px; padding:5px 10px; border-radius:999px; background:var(--surface-alt); color:var(--text-muted); border:1px solid var(--border); cursor:pointer; white-space:nowrap; font-weight:600; }
+  .status-pill.offline { color:var(--danger); background:var(--danger-bg); border-color:transparent; }
+  .status-pill.syncing { color:var(--accent); }
+
+  .shopbar { margin:0 16px 10px; padding:9px 12px; border-radius:var(--radius); display:flex; align-items:center; gap:10px; border:1px solid var(--border); background:var(--surface); flex-shrink:0; }
+  .shopbar .dot { width:12px; height:12px; border-radius:50%; background:#999; flex-shrink:0; }
+  .shopbar.open .dot { background:var(--ok); box-shadow:0 0 0 4px rgba(46,184,114,.22); }
+  .shopbar.closed .dot { background:var(--danger); }
+  .shopbar .st { flex:1; min-width:0; font-size:15px; font-weight:700; }
+  .shopbar .st small { display:block; font-size:12.5px; color:var(--text-muted); font-weight:500; }
+  .shopbar button { border:none; border-radius:var(--radius-sm); padding:8px 14px; font-size:14px; font-weight:700; cursor:pointer; background:var(--primary); color:var(--primary-text); white-space:nowrap; }
+  .shopbar.open button { background:var(--danger-bg); color:var(--danger); }
+
+  .banner { margin:0 16px 10px; padding:10px 12px; border-radius:var(--radius-sm); background:var(--danger-bg); color:var(--danger); font-size:14px; display:none; flex-shrink:0; line-height:1.6; font-weight:500; }
+  .banner.show { display:block; }
+  .banner.offline-mode { background:var(--warn-bg); color:var(--warn-text); }
+  main { flex:1; overflow:hidden; position:relative; }
+  .view { display:none; height:100%; flex-direction:column; }
+  .view.active { display:flex; }
+  .scroll-view { padding:0 16px 16px; overflow-y:auto; }
+  #view-sell { flex-direction:row; }
+  .sell-left { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .search-row { display:flex; gap:8px; padding:0 16px 10px; flex-shrink:0; }
+  .search-row input { flex:1; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:12px 13px; font-size:16px; color:var(--text); }
+  .search-row input::placeholder { color:var(--text-muted); }
+  .scan-btn { flex-shrink:0; width:46px; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); font-size:19px; cursor:pointer; color:var(--text); }
+  .product-scroll { flex:1; overflow-y:auto; padding:0 16px 16px; }
+  .product-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; }
+  .product-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px; text-align:left; cursor:pointer; display:flex; flex-direction:column; gap:4px; min-height:96px; color:var(--text); }
+  .product-card:active { transform:scale(0.97); }
+  .product-card:disabled { opacity:0.45; cursor:not-allowed; }
+  .product-card .pname { font-size:15px; font-weight:700; line-height:1.35; }
+  .product-card .pzone { font-size:12.5px; color:var(--info-text); font-weight:600; }
+  .product-card .pprice { font-size:16.5px; font-weight:700; color:var(--primary); margin-top:auto; }
+  .product-card .pstock { font-size:12.5px; color:var(--text-muted); font-weight:600; }
+  .product-card .pstock.low { color:var(--danger); font-weight:700; }
+  .empty-state { text-align:center; color:var(--text-muted); padding:40px 20px; font-size:15px; line-height:1.7; font-weight:500; }
+
+  .cart-panel { width:350px; flex-shrink:0; background:var(--surface); border-left:1px solid var(--border); display:flex; flex-direction:column; }
+  .cart-header { padding:14px 16px; border-bottom:1px solid var(--border); }
+  .cart-header h2 { font-size:16px; margin:0; font-weight:700; }
+  .cart-items { flex:1; overflow-y:auto; padding:8px 12px; }
+  .cart-line { display:flex; align-items:center; gap:8px; padding:11px 4px; border-bottom:1px solid var(--border); }
+  .cart-line .cl-info { flex:1; min-width:0; }
+  .cart-line .cl-name { font-size:14.5px; font-weight:700; }
+  .cart-line .cl-price { font-size:13px; color:var(--text-muted); font-weight:500; }
+  .cart-line .cl-zone { font-size:12.5px; color:var(--info-text); font-weight:600; }
+  .qty-stepper { display:flex; align-items:center; gap:6px; }
+  .qty-stepper button { width:28px; height:28px; border-radius:7px; border:1px solid var(--border); background:var(--surface-alt); color:var(--text); font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:700; }
+  .qty-stepper span { font-size:14px; min-width:22px; text-align:center; font-weight:700; }
+  .cl-remove { background:none; border:none; color:var(--text-muted); font-size:17px; cursor:pointer; padding:4px; }
+  .cart-footer { padding:14px 16px; border-top:1px solid var(--border); }
+  .cart-total-row { display:flex; justify-content:space-between; font-size:16px; margin-bottom:12px; font-weight:600; }
+  .cart-total-row .amt { font-weight:700; font-size:20px; color:var(--primary); }
+  .btn { display:block; width:100%; text-align:center; border:none; border-radius:var(--radius-sm); padding:14px; font-size:16px; font-weight:700; cursor:pointer; }
+  .btn-primary { background:var(--primary); color:var(--primary-text); }
+  .btn-primary:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn-ghost { background:var(--surface-alt); color:var(--text); border:1px solid var(--border); }
+  .btn-danger { background:var(--danger); color:#fff; }
+  .cart-fab { display:none; position:absolute; left:16px; right:16px; bottom:16px; background:var(--primary); color:var(--primary-text); border:none; border-radius:var(--radius); padding:15px 16px; font-size:15px; font-weight:700; align-items:center; justify-content:space-between; cursor:pointer; z-index:20; box-shadow:0 6px 20px rgba(0,0,0,0.18); }
+  .cart-sheet-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:40; }
+  .cart-sheet-overlay.open { display:block; }
+  .cart-sheet { position:fixed; left:0; right:0; bottom:0; max-height:82vh; background:var(--surface); border-radius:18px 18px 0 0; z-index:41; display:flex; flex-direction:column; transform:translateY(100%); transition:transform .25s ease; max-width:1100px; margin:0 auto; }
+  .cart-sheet.open { transform:translateY(0); }
+  .sheet-handle { padding:10px 0 4px; display:flex; justify-content:center; }
+  .sheet-handle span { width:36px; height:4px; border-radius:3px; background:var(--border); display:block; }
+
+  .toolbar { display:flex; gap:8px; padding:12px 0 8px; position:sticky; top:0; background:var(--bg); z-index:5; }
+  .toolbar input, .toolbar select { flex:1; min-width:0; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:11px 12px; font-size:15px; color:var(--text); }
+  .btn-add { flex-shrink:0; background:var(--primary); color:var(--primary-text); border:none; border-radius:var(--radius-sm); padding:11px 16px; font-size:15px; font-weight:700; cursor:pointer; }
+  .filter-chips { display:flex; gap:8px; padding:8px 0 10px; flex-wrap:wrap; }
+  .chip { border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:999px; padding:8px 15px; font-size:14px; cursor:pointer; font-weight:700; }
+  .chip.active { background:var(--primary); color:var(--primary-text); border-color:var(--primary); }
+  .chip.warn { background:var(--warn-bg); color:var(--warn-text); border-color:transparent; }
+  .chip.warn.active { background:var(--accent); color:#fff; }
+
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px; margin-bottom:8px; }
+  .card-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .card .c-title { font-size:15px; font-weight:700; }
+  .card .c-meta { font-size:13.5px; color:var(--text-muted); margin-top:3px; font-weight:500; line-height:1.55; }
+  .card .c-amt { font-size:16px; font-weight:700; color:var(--primary); text-align:right; white-space:nowrap; }
+  .card .c-amt.negative { color:var(--danger); }
+  .row-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .small-btn { background:var(--surface-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 12px; font-size:13.5px; color:var(--text); cursor:pointer; font-weight:600; }
+  .small-btn.primary { background:var(--primary); color:var(--primary-text); border-color:transparent; }
+  .small-btn.danger { color:var(--danger); }
+  .badge { display:inline-block; font-size:12px; padding:3px 9px; border-radius:999px; font-weight:700; margin:5px 5px 0 0; background:var(--surface-alt); color:var(--text-muted); }
+  .badge.red { background:var(--danger-bg); color:var(--danger); }
+  .badge.orange { background:var(--warn-bg); color:var(--warn-text); }
+  .badge.blue { background:var(--info-bg); color:var(--info-text); }
+  .badge.green { background:#DDF3E6; color:#1B6B3F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .badge.green { background:#1E3A2A; color:#7FD9A6; } }
+
+  .summary-cards { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:14px; }
+  .sum-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px; }
+  .sum-card .sc-label { font-size:13px; color:var(--text-muted); margin-bottom:4px; font-weight:600; }
+  .sum-card .sc-value { font-size:18px; font-weight:700; }
+  .sum-card .sc-value.negative { color:var(--danger); }
+  .breakdown-box { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:13px 15px; margin-bottom:14px; }
+  .breakdown-box h4 { margin:0 0 8px; font-size:14px; font-weight:700; color:var(--text-muted); }
+  .breakdown-row { display:flex; justify-content:space-between; gap:10px; font-size:14.5px; padding:6px 0; border-bottom:1px solid var(--border); font-weight:500; }
+  .breakdown-row:last-child { border-bottom:none; }
+  .breakdown-row .br-val { font-weight:700; color:var(--primary); text-align:right; }
+  .subhead { display:flex; align-items:center; gap:10px; padding:12px 0 8px; }
+  .subhead h3 { margin:0; font-size:17px; }
+  .back-btn { border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:var(--radius-sm); padding:8px 12px; font-size:14px; font-weight:700; cursor:pointer; }
+  .menu-item { display:flex; align-items:center; gap:14px; width:100%; text-align:left; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:15px; margin-bottom:8px; cursor:pointer; color:var(--text); }
+  .menu-item .mi-icon { font-size:24px; }
+  .menu-item .mi-text { flex:1; min-width:0; }
+  .menu-item .mi-title { font-size:15.5px; font-weight:700; }
+  .menu-item .mi-sub { font-size:13.5px; color:var(--text-muted); font-weight:500; }
+  .menu-item .mi-arrow { color:var(--text-muted); font-size:18px; }
+  .form-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin:8px 0 14px; }
+  .hint { font-size:13px; color:var(--text-muted); margin:-4px 0 10px; line-height:1.55; font-weight:500; }
+  .att-row { display:flex; align-items:center; gap:10px; }
+  .att-row .att-info { flex:1; min-width:0; }
+  .att-status { font-size:13.5px; font-weight:600; margin-top:2px; }
+  .att-status.working { color:var(--ok); }
+  .att-status.done { color:var(--info-text); }
+  .att-status.absent { color:var(--text-muted); }
+  .att-status.warn { color:var(--danger); }
+
+  .bottomnav { display:flex; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; padding-bottom:env(safe-area-inset-bottom); }
+  .navbtn { position:relative; flex:1; border:none; background:none; padding:9px 2px 10px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--text-muted); }
+  .navbtn .navicon { font-size:20px; }
+  .navbtn .navlabel { font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .navbtn.active { color:var(--primary); }
+  .navbadge { position:absolute; top:3px; left:calc(50% + 6px); min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:var(--danger); color:#fff; font-size:11px; font-weight:700; display:none; align-items:center; justify-content:center; }
+  .navbadge.show { display:flex; }
+
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:60; align-items:center; justify-content:center; padding:16px; }
+  .modal-overlay.open { display:flex; }
+  .modal-box { background:var(--surface); border-radius:var(--radius); width:100%; max-width:440px; max-height:90vh; overflow-y:auto; padding:20px; }
+  .modal-box h3 { margin:0 0 14px; font-size:17px; font-weight:700; }
+  .field { margin-bottom:13px; }
+  .field label { display:block; font-size:13.5px; color:var(--text-muted); margin-bottom:6px; font-weight:700; }
+  .field input, .field select, .field textarea { width:100%; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:var(--radius-sm); padding:11px 12px; font-size:15px; font-family:inherit; }
+  .field textarea { resize:vertical; }
+  .field-row { display:flex; gap:10px; }
+  .field-row .field { flex:1; min-width:0; }
+  .inline-row { display:flex; gap:6px; }
+  .inline-row input { flex:1; }
+  .gen-btn { flex-shrink:0; width:44px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-alt); font-size:17px; cursor:pointer; }
+  .modal-actions { display:flex; gap:10px; margin-top:16px; }
+  .modal-actions .btn { flex:1; }
+  .field-error { color:var(--danger); font-size:13px; margin-top:4px; display:none; font-weight:600; }
+  .field-error.show { display:block; }
+  .toast { position:fixed; bottom:90px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--bg); padding:12px 20px; border-radius:999px; font-size:14.5px; font-weight:700; z-index:80; opacity:0; transition:all .25s ease; pointer-events:none; max-width:88%; text-align:center; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .confirm-box p { font-size:15px; line-height:1.7; color:var(--text-muted); margin:0 0 4px; font-weight:500; white-space:pre-line; }
+  .setup-box { max-width:480px; margin:40px auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; }
+  .setup-box h2 { margin-top:0; font-size:18px; }
+  .setup-box p { font-size:14.5px; color:var(--text-muted); line-height:1.7; font-weight:500; }
+  .setup-box input { width:100%; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:var(--radius-sm); padding:12px; font-size:15px; margin:10px 0; }
+  .scan-modal-box { background:var(--surface); border-radius:var(--radius); width:100%; max-width:420px; padding:16px; }
+  .scan-modal-box h3 { margin:0 0 10px; font-size:16px; display:flex; justify-content:space-between; align-items:center; }
+  .scan-modal-box h3 button { background:none; border:none; font-size:19px; color:var(--text-muted); cursor:pointer; }
+  #readerContainer { width:100%; border-radius:var(--radius-sm); overflow:hidden; background:#000; min-height:260px; }
+  .scan-hint { font-size:13.5px; color:var(--text-muted); text-align:center; margin-top:10px; font-weight:500; }
+
+  .pay-methods { display:flex; gap:8px; margin-bottom:14px; }
+  .pay-method-btn { flex:1; padding:13px 6px; border-radius:var(--radius-sm); border:2px solid var(--border); background:var(--surface); color:var(--text); font-size:13.5px; font-weight:700; cursor:pointer; text-align:center; }
+  .pay-method-btn.selected { border-color:var(--primary); background:var(--surface-alt); color:var(--primary); }
+  .pay-total-display { text-align:center; padding:14px; background:var(--surface-alt); border-radius:var(--radius-sm); margin-bottom:12px; }
+  .pay-total-display .pt-label { font-size:13px; color:var(--text-muted); font-weight:600; }
+  .pay-total-display .pt-amt { font-size:28px; font-weight:700; color:var(--primary); }
+  .change-display { text-align:center; padding:11px; border-radius:var(--radius-sm); margin-top:8px; font-size:15.5px; font-weight:700; }
+  .change-display.ok { background:var(--surface-alt); color:var(--primary); }
+  .change-display.short { background:var(--warn-bg); color:var(--warn-text); }
+  .toggle-row { display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface-alt); margin-bottom:12px; font-weight:700; font-size:15px; cursor:pointer; }
+  .toggle-row input { width:22px; height:22px; flex-shrink:0; }
+  .vehicle-chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .barcode-preview-box { text-align:center; padding:16px; background:var(--surface-alt); border-radius:var(--radius-sm); margin-bottom:14px; }
+  .return-line { display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--border); }
+  .return-line .rl-info { flex:1; min-width:0; font-size:14.5px; font-weight:600; }
+  .return-line .rl-max { font-size:12.5px; color:var(--text-muted); font-weight:500; }
+  .hist-item { display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); font-size:14.5px; }
+  .hist-item:last-child { border-bottom:none; }
+  .hist-item .hi-icon { font-size:18px; width:24px; text-align:center; }
+  .hist-item .hi-main { flex:1; min-width:0; font-weight:600; }
+  .hist-item .hi-sub { font-size:13px; color:var(--text-muted); font-weight:500; }
+
+  #printArea { display:none; }
+  @media print {
+    body * { visibility:hidden; }
+    #printArea, #printArea * { visibility:visible; }
+    #printArea { display:block; position:fixed; top:0; left:0; width:100%; }
+  }
+  .receipt { font-family:'Noto Sans Thai', monospace; width:50mm; margin:0 auto; color:#000; font-size:10.5px; line-height:1.35; }
+  .receipt .r-shop { text-align:center; font-weight:700; font-size:13px; }
+  .receipt .r-shopphone { text-align:center; font-size:9.5px; margin-bottom:3px; }
+  .receipt .r-meta { display:flex; justify-content:space-between; gap:4px; font-size:9.5px; margin-bottom:2px; }
+  .receipt hr { border:none; border-top:1px dashed #000; margin:3px 0; }
+  .receipt .r-line { display:flex; justify-content:space-between; gap:6px; padding:1px 0; }
+  .receipt .r-line .r-name { flex:1; }
+  .receipt .r-total { display:flex; justify-content:space-between; font-weight:700; font-size:12px; padding-top:2px; }
+  .receipt .r-pay { display:flex; justify-content:space-between; gap:6px; font-size:10px; padding-top:1px; }
+  .receipt .r-note { font-size:9.5px; padding-top:2px; }
+  .receipt .r-thanks { text-align:center; margin-top:5px; font-size:9.5px; }
+  .label-sheet { display:flex; flex-wrap:wrap; align-content:flex-start; gap:1.5mm; }
+  .label-cell {
+    width:26mm; box-sizing:border-box; text-align:center; color:#000; padding:1mm 0.5mm;
+    border:0.2mm dotted #bbb; overflow:hidden; page-break-inside:avoid;
+  }
+  .label-cell .ln {
+    font-size:7.5px; font-weight:700; line-height:1.15; margin-bottom:0.5mm;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:1.3em;
+  }
+  .label-cell svg { width:100%; height:auto; display:block; }
+  @media (max-width:720px) { .cart-panel { display:none; } .cart-fab { display:flex; } .product-scroll { padding-bottom:90px; } }
+  ::-webkit-scrollbar { width:0; height:0; }
+</style>
+</head>
+<body>
+
+<div class="setup-box" id="setupBox" style="display:none;">
+  <h2>🛒 ตั้งค่าเชื่อมต่อ Supabase</h2>
+  <p>วาง Project URL และ anon public key จากโปรเจกต์ Supabase ของคุณ (ดูขั้นตอนใน SETUP.md) แล้วกดบันทึก ระบบจะจำค่านี้ไว้ในเบราว์เซอร์นี้</p>
+  <input id="setupUrlInput" type="text" placeholder="https://xxxxxxxx.supabase.co">
+  <input id="setupKeyInput" type="text" placeholder="anon public key (eyJhbGciOi...)">
+  <button class="btn btn-primary" id="setupSaveBtn">บันทึกและเริ่มใช้งาน</button>
+</div>
+
+<div id="app" style="display:none;">
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">🛒</div>
+      <div><h1>นัทอะไหร่แต่ง</h1><div class="sub" id="dateLabel">—</div></div>
+    </div>
+    <button class="status-pill" id="statusPill" title="แตะเพื่อเปลี่ยนการเชื่อมต่อ Supabase">กำลังเชื่อมต่อ…</button>
+  </div>
+
+  <div class="shopbar closed" id="shopBar">
+    <span class="dot"></span>
+    <div class="st"><span id="shopStatusText">กำลังโหลดสถานะร้าน…</span><small id="shopStatusSub"></small></div>
+    <button id="shopToggleBtn">เปิดร้าน</button>
+  </div>
+
+  <div class="banner" id="offlineBanner"></div>
+
+  <main>
+    <!-- ขาย -->
+    <section class="view active" id="view-sell">
+      <div class="sell-left">
+        <div class="search-row">
+          <input id="searchInput" type="text" placeholder="ค้นหาชื่อ/โซน หรือสแกนบาร์โค้ดแล้วกด Enter" autocomplete="off">
+          <button class="scan-btn" id="openCameraScanBtn" title="สแกนด้วยกล้อง">📷</button>
+        </div>
+        <div class="product-scroll">
+          <div class="product-grid" id="productGrid"></div>
+          <div class="empty-state" id="sellEmptyState" style="display:none;"></div>
+        </div>
+      </div>
+      <aside class="cart-panel">
+        <div class="cart-header"><h2>ตะกร้า</h2></div>
+        <div class="cart-items" id="cartItemsDesktop"></div>
+        <div class="cart-footer">
+          <div class="cart-total-row"><span>ยอดรวม</span><span class="amt" id="cartTotalDesktop">฿0</span></div>
+          <button class="btn btn-primary" id="checkoutBtnDesktop" disabled>ชำระเงิน</button>
+        </div>
+      </aside>
+      <button class="cart-fab" id="cartFab"><span id="cartFabLabel">ตะกร้า 0 รายการ</span><span id="cartFabTotal">฿0</span></button>
+    </section>
+
+    <!-- สินค้า -->
+    <section class="view scroll-view" id="view-products">
+      <div class="toolbar">
+        <input id="productSearchInput" type="text" placeholder="ค้นหาชื่อ / บาร์โค้ด / โซน">
+        <button class="btn-add" id="addProductBtn">+ เพิ่มสินค้า</button>
+      </div>
+      <div class="filter-chips">
+        <select id="zoneFilter" class="chip" style="padding-right:10px;"><option value="">ทุกโซน</option></select>
+        <button class="chip warn" id="dupChip" style="display:none;">⚠ ชื่อซ้ำ</button>
+      </div>
+      <div id="productList"></div>
+      <div class="empty-state" id="productsEmptyState" style="display:none;"></div>
+    </section>
+
+    <!-- จัดส่ง -->
+    <section class="view scroll-view" id="view-delivery">
+      <div class="filter-chips" id="deliveryChips">
+        <button class="chip active" data-dfilter="pending">รอส่ง</button>
+        <button class="chip" data-dfilter="dispatched">กำลังส่ง</button>
+        <button class="chip" data-dfilter="delivered">ส่งแล้ว</button>
+        <button class="chip" data-dfilter="all">ทั้งหมด</button>
+      </div>
+      <div id="deliveryList"></div>
+      <div class="empty-state" id="deliveryEmptyState" style="display:none;"></div>
+    </section>
+
+    <!-- รายงาน -->
+    <section class="view scroll-view" id="view-report">
+      <div class="filter-chips" id="reportChips">
+        <button class="chip active" data-range="today">วันนี้</button>
+        <button class="chip" data-range="week">7 วันล่าสุด</button>
+        <button class="chip" data-range="all">ทั้งหมด</button>
+      </div>
+      <div class="summary-cards">
+        <div class="sum-card"><div class="sc-label">ยอดขายสุทธิ</div><div class="sc-value" id="sumRevenue">฿0</div></div>
+        <div class="sum-card"><div class="sc-label">กำไร/ขาดทุน (ไม่รวมค่าส่ง)</div><div class="sc-value" id="sumProfit">฿0</div></div>
+        <div class="sum-card"><div class="sc-label">จำนวนบิล</div><div class="sc-value" id="sumBills">0</div></div>
+        <div class="sum-card"><div class="sc-label">เฉลี่ย/บิล</div><div class="sc-value" id="sumAvg">฿0</div></div>
+        <div class="sum-card"><div class="sc-label">ยอดค้างรับ</div><div class="sc-value" id="sumOutstanding">฿0</div></div>
+        <div class="sum-card"><div class="sc-label">ค่าจัดส่งที่เก็บได้</div><div class="sc-value" id="sumDeliveryFee">฿0</div></div>
+      </div>
+      <div class="breakdown-box"><h4>สินค้าขายดี</h4><div id="topProductsList"></div></div>
+      <div class="breakdown-box"><h4>การจัดส่งแยกตามรถ</h4><div id="vehicleBreakdownList"></div></div>
+      <div id="salesList"></div>
+      <div class="empty-state" id="reportEmptyState" style="display:none;"></div>
+    </section>
+
+    <!-- เพิ่มเติม -->
+    <section class="view scroll-view" id="view-more">
+      <div class="subhead"><h3>เมนูเพิ่มเติม</h3></div>
+      <button class="menu-item" data-goto="credit"><span class="mi-icon">💳</span><span class="mi-text"><div class="mi-title">ลูกค้าค้างจ่าย</div><div class="mi-sub" id="moreCreditSub">—</div></span><span class="mi-arrow">›</span></button>
+      <button class="menu-item" data-goto="attendance"><span class="mi-icon">🕒</span><span class="mi-text"><div class="mi-title">เข้า-ออกงานพนักงาน</div><div class="mi-sub" id="moreAttSub">—</div></span><span class="mi-arrow">›</span></button>
+      <button class="menu-item" data-goto="payroll"><span class="mi-icon">💰</span><span class="mi-text"><div class="mi-title">จ่ายค่าจ้างพนักงาน</div><div class="mi-sub" id="morePayrollSub">—</div></span><span class="mi-arrow">›</span></button>
+      <button class="menu-item" data-goto="shoplog"><span class="mi-icon">🏪</span><span class="mi-text"><div class="mi-title">ประวัติเปิด-ปิดร้าน</div><div class="mi-sub" id="moreShopSub">—</div></span><span class="mi-arrow">›</span></button>
+      <button class="menu-item" data-goto="settings"><span class="mi-icon">⚙️</span><span class="mi-text"><div class="mi-title">ตั้งค่าค่าจัดส่ง</div><div class="mi-sub" id="moreSettingsSub">—</div></span><span class="mi-arrow">›</span></button>
+    </section>
+
+    <!-- ค้างจ่าย -->
+    <section class="view scroll-view" id="view-credit">
+      <div class="subhead"><button class="back-btn" data-goto="more">‹ กลับ</button><h3>ลูกค้าค้างจ่าย</h3></div>
+      <div class="summary-cards" style="grid-template-columns:1fr;"><div class="sum-card"><div class="sc-label">ยอดค้างรับทั้งหมด</div><div class="sc-value" id="creditOutstandingTotal">฿0</div></div></div>
+      <div id="creditList"></div>
+      <div class="empty-state" id="creditEmptyState" style="display:none;"></div>
+    </section>
+
+    <!-- เข้า-ออกงาน -->
+    <section class="view scroll-view" id="view-attendance">
+      <div class="subhead"><button class="back-btn" data-goto="more">‹ กลับ</button><h3>เข้า-ออกงานพนักงาน</h3></div>
+      <div class="form-card">
+        <div class="inline-row">
+          <input id="newEmpName" type="text" placeholder="ชื่อพนักงานใหม่" style="border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;padding:11px 12px;font-size:15px;">
+          <button class="btn-add" id="addEmpBtn">+ เพิ่ม</button>
+        </div>
+      </div>
+      <div class="breakdown-box"><h4>วันนี้</h4><div id="attRoster"></div></div>
+      <div class="breakdown-box"><h4>สรุปชั่วโมงทำงานเดือนนี้</h4><div id="attMonthList"></div></div>
+      <div class="breakdown-box"><h4>ประวัติล่าสุด</h4><div id="attHistory"></div></div>
+    </section>
+
+    <!-- ค่าจ้าง -->
+    <section class="view scroll-view" id="view-payroll">
+      <div class="subhead"><button class="back-btn" data-goto="more">‹ กลับ</button><h3>จ่ายค่าจ้างพนักงาน</h3></div>
+      <div class="form-card">
+        <div class="field"><label>ชื่อพนักงาน *</label><input id="plName" type="text" list="employeeList" placeholder="เช่น สมชาย"></div>
+        <div class="field-row">
+          <div class="field"><label>จำนวนเงิน (฿) *</label><input id="plAmount" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></div>
+          <div class="field"><label>หมายเหตุ</label><input id="plNote" type="text" placeholder="เช่น ค่าจ้างเดือนนี้"></div>
+        </div>
+        <button class="btn btn-primary" id="addPayrollBtn">บันทึกจ่ายค่าจ้าง</button>
+      </div>
+      <div class="summary-cards" style="grid-template-columns:1fr;"><div class="sum-card"><div class="sc-label">จ่ายไปแล้วเดือนนี้</div><div class="sc-value" id="payrollMonthTotal">฿0</div></div></div>
+      <div id="payrollList"></div>
+      <div class="empty-state" id="payrollEmptyState" style="display:none;"></div>
+    </section>
+
+    <!-- ประวัติร้าน -->
+    <section class="view scroll-view" id="view-shoplog">
+      <div class="subhead"><button class="back-btn" data-goto="more">‹ กลับ</button><h3>ประวัติเปิด-ปิดร้าน</h3></div>
+      <div id="shopLogList"></div>
+      <div class="empty-state" id="shopLogEmpty" style="display:none;">ยังไม่มีประวัติเปิด-ปิดร้าน<br>กดปุ่ม "เปิดร้าน" ด้านบนเพื่อเริ่มบันทึก</div>
+    </section>
+
+    <!-- ตั้งค่า -->
+    <section class="view scroll-view" id="view-settings">
+      <div class="subhead"><button class="back-btn" data-goto="more">‹ กลับ</button><h3>ตั้งค่าค่าจัดส่ง</h3></div>
+      <div class="form-card">
+        <p class="hint" style="margin-top:0;">ค่าจัดส่ง = ค่าจัดส่งเริ่มต้น (ครอบคลุมระยะทางเริ่มต้น) + ส่วนที่เกินคิดกิโลเมตรละกี่บาท ตั้งเป็น 0 ทั้งหมดถ้าต้องการกรอกค่าส่งเองทุกครั้ง</p>
+        <div class="field"><label>ค่าจัดส่งเริ่มต้น (฿)</label><input id="setBaseFee" type="number" inputmode="decimal" min="0" step="1"></div>
+        <div class="field"><label>ระยะทางที่รวมในค่าเริ่มต้น (กม.)</label><input id="setBaseKm" type="number" inputmode="decimal" min="0" step="0.5"></div>
+        <div class="field"><label>ส่วนที่เกิน คิดกิโลเมตรละ (฿)</label><input id="setPerKm" type="number" inputmode="decimal" min="0" step="1"></div>
+        <button class="btn btn-primary" id="saveSettingsBtn">บันทึกการตั้งค่า</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottomnav">
+    <button class="navbtn active" data-view="sell"><span class="navicon">🧾</span><span class="navlabel">ขาย</span></button>
+    <button class="navbtn" data-view="products"><span class="navicon">📦</span><span class="navlabel">สินค้า</span></button>
+    <button class="navbtn" data-view="delivery"><span class="navicon">🚚</span><span class="navlabel">จัดส่ง</span><span class="navbadge" id="deliveryBadge">0</span></button>
+    <button class="navbtn" data-view="report"><span class="navicon">📊</span><span class="navlabel">รายงาน</span></button>
+    <button class="navbtn" data-view="more"><span class="navicon">☰</span><span class="navlabel">เพิ่มเติม</span><span class="navbadge" id="moreBadge">!</span></button>
+  </nav>
+</div>
+
+<datalist id="zoneList"></datalist>
+<datalist id="employeeList"></datalist>
+
+<div class="cart-sheet-overlay" id="cartSheetOverlay"></div>
+<div class="cart-sheet" id="cartSheet">
+  <div class="sheet-handle"><span></span></div>
+  <div class="cart-header"><h2>ตะกร้า</h2></div>
+  <div class="cart-items" id="cartItemsMobile"></div>
+  <div class="cart-footer">
+    <div class="cart-total-row"><span>ยอดรวม</span><span class="amt" id="cartTotalMobile">฿0</span></div>
+    <button class="btn btn-primary" id="checkoutBtnMobile" disabled>ชำระเงิน</button>
+  </div>
+</div>
+
+<!-- สินค้า: เพิ่ม/แก้ไข -->
+<div class="modal-overlay" id="productModalOverlay"><div class="modal-box">
+  <h3 id="productModalTitle">เพิ่มสินค้า</h3>
+  <div class="field"><label>ชื่อสินค้า *</label><input id="fName" type="text" placeholder="เช่น น้ำมันเครื่อง 1 ลิตร"><div class="field-error" id="errName">กรุณากรอกชื่อสินค้า</div></div>
+  <div class="field-row">
+    <div class="field"><label>ราคาขาย (฿) *</label><input id="fPrice" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"><div class="field-error" id="errPrice">กรุณากรอกราคาที่ถูกต้อง</div></div>
+    <div class="field"><label>ต้นทุน (฿)</label><input id="fCost" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+  </div>
+  <div class="field-row">
+    <div class="field"><label>จำนวนคงเหลือ *</label><input id="fStock" type="number" inputmode="numeric" min="0" step="1" placeholder="0"><div class="field-error" id="errStock">กรุณากรอกจำนวน</div></div>
+    <div class="field"><label>📍 โซน/ตำแหน่งวางของ</label><input id="fZone" type="text" list="zoneList" placeholder="เช่น A2, ชั้นวาง 3"></div>
+  </div>
+  <div class="field"><label>บาร์โค้ด (เว้นว่างได้ ระบบสร้างให้อัตโนมัติ)</label>
+    <div class="inline-row"><input id="fBarcode" type="text" placeholder="สแกน พิมพ์ หรือเว้นว่างไว้"><button class="gen-btn" id="genBarcodeBtn" title="สร้างบาร์โค้ดอัตโนมัติ">🎲</button></div>
+  </div>
+  <div class="field"><label>หมวดหมู่ (ถ้ามี)</label><input id="fCategory" type="text" placeholder="เช่น น้ำมันเครื่อง"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelProductBtn">ยกเลิก</button><button class="btn btn-primary" id="saveProductBtn">บันทึก</button></div>
+</div></div>
+
+<!-- สินค้า: รับเข้า -->
+<div class="modal-overlay" id="recvModalOverlay"><div class="modal-box">
+  <h3>📥 รับสินค้าเข้า</h3>
+  <div class="hint" id="recvProductName" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:12px;"></div>
+  <div class="field-row">
+    <div class="field"><label>จำนวนที่รับ *</label><input id="fRecvQty" type="number" inputmode="numeric" min="1" step="1" placeholder="0"></div>
+    <div class="field"><label>รับเมื่อ</label><input id="fRecvAt" type="datetime-local"></div>
+  </div>
+  <div class="field"><label>หมายเหตุ (ผู้ขาย/เลขที่ใบส่งของ)</label><input id="fRecvNote" type="text" placeholder="ไม่บังคับ"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelRecvBtn">ยกเลิก</button><button class="btn btn-primary" id="confirmRecvBtn">บันทึกรับเข้า</button></div>
+</div></div>
+
+<!-- สินค้า: ประวัติ -->
+<div class="modal-overlay" id="historyModalOverlay"><div class="modal-box">
+  <h3 id="historyTitle">ประวัติสินค้า</h3>
+  <div class="hint" id="historySummary"></div>
+  <div id="historyList"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="closeHistoryBtn">ปิด</button></div>
+</div></div>
+
+<!-- ป้ายบาร์โค้ด -->
+<div class="modal-overlay" id="barcodeModalOverlay"><div class="modal-box">
+  <h3>ป้ายบาร์โค้ดสินค้า</h3>
+  <div class="barcode-preview-box">
+    <div id="barcodePreviewName" style="font-weight:700;margin-bottom:8px;"></div>
+    <svg id="barcodePreviewSvg"></svg>
+  </div>
+  <div class="field"><label>จำนวนป้ายที่พิมพ์</label><input id="fLabelQty" type="number" inputmode="numeric" min="1" step="1" value="12"></div>
+  <div class="hint" style="margin-top:-6px;">ป้ายจะเรียงต่อกันหลายดวงต่อแถวอัตโนมัติตามขนาดกระดาษที่เลือกตอนพิมพ์ เพื่อประหยัดกระดาษ</div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="closeBarcodeModalBtn">ปิด</button><button class="btn btn-primary" id="printBarcodeBtn">🖨 พิมพ์ป้าย</button></div>
+</div></div>
+
+<!-- ชำระเงิน -->
+<div class="modal-overlay" id="paymentModalOverlay"><div class="modal-box">
+  <h3>ชำระเงิน</h3>
+  <div class="pay-total-display"><div class="pt-label" id="payBreakdown">ยอดที่ต้องชำระ</div><div class="pt-amt" id="payTotalAmt">฿0</div></div>
+
+  <label class="toggle-row"><input type="checkbox" id="deliveryToggle"> 🚚 จัดส่งให้ลูกค้า</label>
+  <div id="deliveryBox" style="display:none;">
+    <div class="field"><label>หมู่บ้าน/ชุมชน</label><input id="fVillage" type="text" placeholder="เช่น บ้านหนองบัว"></div>
+    <div class="field"><label>ที่อยู่จัดส่ง *</label><textarea id="fAddress" rows="2" placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จุดสังเกต"></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>ระยะทาง (กม.)</label><input id="fDistance" type="number" inputmode="decimal" min="0" step="0.5" placeholder="0"></div>
+      <div class="field"><label>ค่าจัดส่ง (฿)</label><input id="fDeliveryFee" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></div>
+    </div>
+    <div class="hint" id="feeHint"></div>
+    <div class="field"><label>หมายเหตุการจัดส่ง</label><input id="fDeliveryNote" type="text" placeholder="เช่น โทรก่อนถึง 30 นาที"></div>
+  </div>
+
+  <div class="pay-methods">
+    <button class="pay-method-btn selected" id="payMethodCash">💵 เงินสด</button>
+    <button class="pay-method-btn" id="payMethodQr">📱 สแกนจ่าย</button>
+    <button class="pay-method-btn" id="payMethodCredit">📝 ค้างทั้งหมด</button>
+  </div>
+  <div id="amountBox">
+    <div class="field"><label id="amountLabel">รับเงินมา (฿)</label><input id="fAmountPaid" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></div>
+    <div class="change-display ok" id="changeDisplay"></div>
+  </div>
+  <div id="customerBox" style="display:none;margin-top:12px;">
+    <div class="hint" id="customerReason"></div>
+    <div class="field-row">
+      <div class="field"><label>ชื่อลูกค้า *</label><input id="fCustomerName" type="text" placeholder="ชื่อลูกค้า"></div>
+      <div class="field"><label id="phoneLabel">เบอร์โทร</label><input id="fCustomerPhone" type="tel" placeholder="08x-xxx-xxxx"></div>
+    </div>
+  </div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelPaymentBtn">ยกเลิก</button><button class="btn btn-primary" id="confirmPaymentBtn">ยืนยันชำระเงิน</button></div>
+</div></div>
+
+<!-- รับชำระค้างจ่าย -->
+<div class="modal-overlay" id="settleModalOverlay"><div class="modal-box">
+  <h3>รับชำระเงินค้างจ่าย</h3>
+  <div class="pay-total-display"><div class="pt-label" id="settleCustomerLabel">ลูกค้า</div><div class="pt-amt" id="settleRemainingAmt">฿0</div></div>
+  <div class="field"><label>รับชำระเพิ่ม (฿)</label><input id="fSettleAmount" type="number" inputmode="decimal" min="0" step="1" placeholder="0"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelSettleBtn">ยกเลิก</button><button class="btn btn-primary" id="confirmSettleBtn">ยืนยันรับชำระ</button></div>
+</div></div>
+
+<!-- ออกส่ง -->
+<div class="modal-overlay" id="dispatchModalOverlay"><div class="modal-box">
+  <h3>🚚 ออกส่งของ</h3>
+  <div class="hint" id="dispatchCustomer" style="font-size:15px;font-weight:700;color:var(--text);"></div>
+  <div class="field"><label>รถที่ใช้ส่ง *</label>
+    <div class="vehicle-chips" id="vehicleChips"></div>
+    <input id="fVehicle" type="text" placeholder="พิมพ์ชื่อรถ/ทะเบียน เช่น กระบะขาว 1กก-1234">
+  </div>
+  <div class="field"><label>คนขับ (ถ้ามี)</label><input id="fDriver" type="text" list="employeeList" placeholder="ชื่อคนขับ"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelDispatchBtn">ยกเลิก</button><button class="btn btn-primary" id="confirmDispatchBtn">ยืนยันออกส่ง</button></div>
+</div></div>
+
+<!-- คืนสินค้า -->
+<div class="modal-overlay" id="returnModalOverlay"><div class="modal-box">
+  <h3>คืนสินค้า</h3>
+  <div id="returnLinesContainer"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelReturnBtn">ยกเลิก</button><button class="btn btn-danger" id="confirmReturnBtn">ยืนยันรับคืน</button></div>
+</div></div>
+
+<!-- แก้ไขเวลาเข้า-ออกงาน -->
+<div class="modal-overlay" id="attEditOverlay"><div class="modal-box">
+  <h3>แก้ไขเวลาทำงาน</h3>
+  <div class="hint" id="attEditName" style="font-size:15px;font-weight:700;color:var(--text);"></div>
+  <div class="field"><label>เข้างาน</label><input id="fAttIn" type="datetime-local"></div>
+  <div class="field"><label>ออกงาน (เว้นว่าง = ยังทำงานอยู่)</label><input id="fAttOut" type="datetime-local"></div>
+  <div class="modal-actions"><button class="btn btn-ghost" id="cancelAttEditBtn">ยกเลิก</button><button class="btn btn-primary" id="saveAttEditBtn">บันทึก</button></div>
+</div></div>
+
+<!-- สแกนกล้อง -->
+<div class="modal-overlay" id="scanModalOverlay"><div class="scan-modal-box">
+  <h3>สแกนบาร์โค้ดด้วยกล้อง <button id="closeScanBtn">✕</button></h3>
+  <div id="readerContainer"></div>
+  <div class="scan-hint">เล็งกล้องไปที่บาร์โค้ดสินค้า ระบบจะเพิ่มลงตะกร้าให้อัตโนมัติ</div>
+</div></div>
+
+<!-- ยืนยัน -->
+<div class="modal-overlay" id="confirmOverlay"><div class="modal-box confirm-box">
+  <h3 id="confirmTitle">ยืนยันการทำรายการ</h3>
+  <p id="confirmMessage"></p>
+  <div class="modal-actions"><button class="btn btn-ghost" id="confirmCancelBtn">ยกเลิก</button><button class="btn btn-danger" id="confirmOkBtn">ยืนยัน</button></div>
+</div></div>
+
+<div id="printArea"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var SHOP_NAME = "ส เจริญวัสดุ";
+  var SHOP_PHONE = "089-4898985, 092-3322794";
+  var SB_URL_KEY = "pos_supabase_url";
+  var SB_KEY_KEY = "pos_supabase_key";
+  var sb = null;
+
+  var state = {
+    supabaseUrl: localStorage.getItem(SB_URL_KEY) || "",
+    supabaseKey: localStorage.getItem(SB_KEY_KEY) || "",
+    products: [], sales: [], payroll: [], deliveries: [], stockLog: [], shopLog: [],
+    employees: [], attendance: [], creditPayments: [],
+    settings: { deliveryBaseFee: 0, deliveryBaseKm: 0, deliveryPerKm: 0 },
+    saleMap: {}, dupMap: {},
+    cart: [], activeView: "sell",
+    productQuery: "", productListQuery: "", zoneFilter: "", dupOnly: false,
+    reportRange: "today", deliveryFilter: "pending",
+    editingProductId: null, pollTimer: null, refreshing: false,
+    paymentMethod: "cash", qrAuto: true,
+    pendingReturnSale: null, returnDraft: [], pendingSettleSale: null,
+    receiveProduct: null, dispatchDelivery: null, editingAttendanceId: null, labelProduct: null,
+    pendingSales: [], cacheSavedAt: null
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  // ---------------- utils ----------------
+  var fmt = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 2 });
+  function money(n) { return "฿" + fmt.format(Math.round((n || 0) * 100) / 100); }
+  function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function fmtDT(iso) {
+    if (!iso) return "-"; var d = new Date(iso); if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  function fmtTime(iso) {
+    if (!iso) return "-"; var d = new Date(iso); if (isNaN(d.getTime())) return "-";
+    return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  }
+  function fmtDur(ms) {
+    var m = Math.max(0, Math.round(ms / 60000)), h = Math.floor(m / 60), mm = m % 60;
+    if (h === 0) return mm + " นาที";
+    return h + " ชม." + (mm ? " " + mm + " นาที" : "");
+  }
+  function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function normName(s) { return String(s || "").toLowerCase().replace(/\s+/g, ""); }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function toLocalInput(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()) + "T" + pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
+  function ms(iso) { var t = new Date(iso).getTime(); return isNaN(t) ? 0 : t; }
+  function uniq(arr) { var seen = {}, out = []; arr.forEach(function (v) { if (v && !seen[v]) { seen[v] = 1; out.push(v); } }); return out; }
+
+  // ---------------- sound ----------------
+  var audioCtx = null;
+  function ensureAudio() { if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } }
+  document.addEventListener("click", ensureAudio, { once: true });
+  function beep(freq, dur, type) {
+    if (!audioCtx) return;
+    try {
+      var osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = type || "sine"; osc.frequency.value = freq; gain.gain.value = 0.15;
+      osc.connect(gain); gain.connect(audioCtx.destination); osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur / 1000);
+      osc.stop(audioCtx.currentTime + dur / 1000);
+    } catch (e) {}
+  }
+  function soundAdd() { beep(880, 90); }
+  function soundScan() { beep(1200, 100); }
+  function soundSuccess() { beep(700, 120); setTimeout(function () { beep(1000, 150); }, 120); }
+  function soundError() { beep(220, 220, "square"); }
+
+  function toast(msg) {
+    var el = $("toast"); el.textContent = msg; el.classList.add("show");
+    clearTimeout(el._t); el._t = setTimeout(function () { el.classList.remove("show"); }, 2400);
+  }
+  function toastError(msg) { toast(msg); soundError(); }
+  var ERR_TEXT = {
+    barcode_exists: "บาร์โค้ดนี้ถูกใช้กับสินค้าอื่นแล้ว", already_clocked_in: "พนักงานคนนี้เข้างานอยู่แล้ว",
+    not_clocked_in: "พนักงานคนนี้ยังไม่ได้เข้างาน", exists: "มีชื่อนี้อยู่แล้ว", busy_try_again: "ระบบกำลังยุ่ง ลองใหม่อีกครั้ง",
+    vehicle_required: "กรุณาระบุรถที่ใช้ส่ง", invalid_range: "เวลาออกงานต้องหลังเวลาเข้างาน", already_paid: "รายการนี้ชำระครบแล้ว"
+  };
+  function errText(code) { return ERR_TEXT[code] || "ทำรายการไม่สำเร็จ กรุณาลองใหม่"; }
+
+  // generic confirm
+  var confirmCb = null;
+  function askConfirm(title, message, okText, cb, danger) {
+    $("confirmTitle").textContent = title; $("confirmMessage").textContent = message;
+    var ok = $("confirmOkBtn"); ok.textContent = okText || "ยืนยัน";
+    ok.className = "btn " + (danger === false ? "btn-primary" : "btn-danger");
+    confirmCb = cb; $("confirmOverlay").classList.add("open");
+  }
+  $("confirmCancelBtn").addEventListener("click", function () { confirmCb = null; $("confirmOverlay").classList.remove("open"); });
+  $("confirmOkBtn").addEventListener("click", function () { var cb = confirmCb; confirmCb = null; $("confirmOverlay").classList.remove("open"); if (cb) cb(); });
+
+  // ---------------- API (Supabase) ----------------
+  function genId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "id_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+  }
+  function isOnline() { return typeof navigator === "undefined" || navigator.onLine !== false; }
+  function looksOffline(e) {
+    var m = (e && e.message || "").toLowerCase();
+    return !isOnline() || m.indexOf("fetch") !== -1 || m.indexOf("network") !== -1 || m === "";
+  }
+
+  // แผนที่ action -> [ชื่อ RPC function ใน Postgres, ฟังก์ชันแปลง body -> พารามิเตอร์]
+  // การทำรายการที่สร้างข้อมูลใหม่ (checkout, returnSale, settleCredit, addEmployee, clockIn, addPayroll, setShopStatus)
+  // รับ "id" ที่ส่งมาจากฝั่งเว็บได้ (p_sale_id/p_id/...) เพื่อให้ปลอดภัยเวลาออฟไลน์แล้วซิงค์ซ้ำ (เรียกซ้ำด้วย id เดิมจะไม่สร้างรายการซ้ำ)
+  var RPC_MAP = {
+    saveProduct:      ["save_product",      function (b) { var p = b.product; return { p_id: p.id || null, p_name: p.name, p_barcode: p.barcode || "", p_price: p.price, p_cost: p.cost, p_stock: p.stock, p_category: p.category || "", p_zone: p.zone || "" }; }],
+    deleteProduct:    ["delete_product",    function (b) { return { p_id: b.id }; }],
+    receiveStock:     ["receive_stock",     function (b) { return { p_product_id: b.productId, p_qty: b.qty, p_note: b.note || "", p_received_at: b.receivedAt || null }; }],
+    checkout:         ["checkout",          function (b) { return { p_items: b.items, p_delivery_fee: b.deliveryFee || 0, p_payment_method: b.paymentMethod, p_amount_paid: b.amountPaid, p_cash_received: b.cashReceived, p_change: b.change, p_customer_name: b.customerName || "", p_customer_contact: b.customerContact || "", p_delivery: b.delivery || null, p_sale_id: b.saleId || null, p_delivery_id: b.deliveryId || null }; }],
+    returnSale:       ["return_sale",       function (b) { return { p_ref_sale_id: b.refSaleId, p_items: b.items, p_id: b.id || null }; }],
+    settleCredit:     ["settle_credit",     function (b) { return { p_sale_id: b.saleId, p_amount: b.amount, p_payment_id: b.paymentId || null }; }],
+    updateDelivery:   ["update_delivery",   function (b) { return { p_id: b.id, p_status: b.status, p_vehicle: b.vehicle || "", p_driver: b.driver || "" }; }],
+    setShopStatus:    ["set_shop_status",   function (b) { return { p_status: b.status, p_note: b.note || b.summary || "", p_id: b.id || null }; }],
+    addEmployee:      ["add_employee",      function (b) { return { p_name: b.name, p_id: b.id || null }; }],
+    removeEmployee:   ["remove_employee",   function (b) { return { p_id: b.id }; }],
+    clockIn:          ["clock_in",          function (b) { return { p_employee_name: b.employeeName, p_id: b.id || null }; }],
+    clockOut:         ["clock_out",         function (b) { return { p_employee_name: b.employeeName }; }],
+    updateAttendance: ["update_attendance", function (b) { return { p_id: b.id, p_clock_in: b.clockIn, p_clock_out: b.clockOut || null }; }],
+    deleteAttendance: ["delete_attendance", function (b) { return { p_id: b.id }; }],
+    addPayroll:       ["add_payroll",       function (b) { return { p_employee_name: b.employeeName, p_amount: b.amount, p_note: b.note || "", p_id: b.id || null }; }],
+    deletePayroll:    ["delete_payroll",    function (b) { return { p_id: b.id }; }],
+    saveSettings:     ["save_settings",     function (b) { return { p_settings: b.settings }; }]
+  };
+  function apiCall(body) {
+    var m = RPC_MAP[body.action];
+    if (!m || !sb) return Promise.reject(new Error("unknown_action"));
+    return sb.rpc(m[0], m[1](body)).then(function (res) {
+      if (res.error) { var ne = new Error(res.error.message || "failed"); ne.isOffline = looksOffline(ne); throw ne; }
+      var d = res.data || {};
+      if (d.ok === false) throw new Error(d.error || "failed");
+      return d;
+    }).catch(function (e) {
+      if (e.isOffline === undefined) e.isOffline = looksOffline(e);
+      throw e;
+    });
+  }
+  function fail(e) { toastError(e && e.isOffline ? "ไม่มีอินเทอร์เน็ต ลองใหม่เมื่อเน็ตกลับมาเชื่อมต่อ" : errText(e && e.message)); }
+
+  function setStatus(text, cls) {
+    var pill = $("statusPill"); pill.textContent = text;
+    pill.classList.remove("offline", "syncing"); if (cls) pill.classList.add(cls);
+  }
+
+  // ---------------- โหมดออฟไลน์: แคชข้อมูลล่าสุด + คิวรายการขายที่รอซิงค์ ----------------
+  var CACHE_KEY = "pos_cache_v1";
+  var QUEUE_KEY = "pos_pending_sales_v1";
+  function saveCache() {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        savedAt: new Date().toISOString(), products: state.products, sales: state.sales, creditPayments: state.creditPayments,
+        deliveries: state.deliveries, stockLog: state.stockLog, shopLog: state.shopLog, employees: state.employees,
+        attendance: state.attendance, payroll: state.payroll, settings: state.settings
+      }));
+    } catch (e) {}
+  }
+  function loadCache() { try { var raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
+  function applyCache(c) {
+    state.products = c.products || []; state.sales = c.sales || []; state.creditPayments = c.creditPayments || [];
+    state.deliveries = c.deliveries || []; state.stockLog = c.stockLog || []; state.shopLog = c.shopLog || [];
+    state.employees = c.employees || []; state.attendance = c.attendance || []; state.payroll = c.payroll || [];
+    state.settings = c.settings || { deliveryBaseFee: 0, deliveryBaseKm: 0, deliveryPerKm: 0 };
+    state.cacheSavedAt = c.savedAt || null;
+    state.saleMap = {}; state.sales.forEach(function (x) { state.saleMap[x.id] = x; });
+    state.dupMap = {}; state.products.forEach(function (p) { var k = normName(p.name); (state.dupMap[k] = state.dupMap[k] || []).push(p); });
+    applyPendingSalesToState();
+  }
+  function loadQueue() { try { var raw = localStorage.getItem(QUEUE_KEY); return raw ? JSON.parse(raw) : []; } catch (e) { return []; } }
+  function saveQueue() { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(state.pendingSales)); } catch (e) {} }
+
+  // นำรายการขายที่ยังรอซิงค์ มาแสดงผลซ้อนทับข้อมูลที่ซิงค์แล้ว (ตัดสต็อกและขึ้นในรายงานไปก่อน)
+  function applyPendingSalesToState() {
+    state.pendingSales.forEach(function (q) {
+      if (state.saleMap[q.saleId]) return; // ซิงค์ไปแล้วจริง ๆ (เผื่อ cache ไม่ทันอัปเดต)
+      var sale = {
+        id: q.saleId, timestamp: q.createdAt, items: q.payload.items, total: q.total, profit: q.profit,
+        paymentMethod: q.payload.paymentMethod, cashReceived: q.payload.cashReceived, change: q.payload.change,
+        type: "sale", refSaleId: "", customerName: q.payload.customerName || "", customerContact: q.payload.customerContact || "",
+        creditPaid: q.creditPaid || 0, creditStatus: q.creditStatus || "", deliveryFee: q.payload.deliveryFee || 0,
+        deliveryId: q.payload.deliveryId || "", pending: true, receiptNo: null
+      };
+      state.sales.unshift(sale); state.saleMap[sale.id] = sale;
+      (sale.items || []).forEach(function (it) {
+        var p = state.products.find(function (x) { return x.id === it.productId; });
+        if (p) p.stock = Math.max(0, p.stock - (it.qty || 0));
+      });
+      if (q.payload.delivery) {
+        state.deliveries.unshift({
+          id: q.payload.deliveryId, saleId: q.saleId, createdAt: q.createdAt, customerName: q.payload.customerName || "",
+          phone: q.payload.customerContact || "", village: q.payload.delivery.village || "", address: q.payload.delivery.address || "",
+          distanceKm: q.payload.delivery.distanceKm || 0, deliveryFee: q.payload.deliveryFee || 0, status: "pending",
+          vehicle: "", driver: "", dispatchedAt: "", deliveredAt: "", note: q.payload.delivery.note || "", pending: true
+        });
+      }
+    });
+  }
+
+  // ---------------- เช็คออฟไลน์/ออนไลน์ ----------------
+  function updateConnectionBadge() {
+    var n = state.pendingSales.length;
+    if (!isOnline()) setStatus("📴 ออฟไลน์" + (n ? " (รอซิงค์ " + n + " บิล)" : ""), "offline");
+    else if (n > 0) setStatus("🔄 กำลังซิงค์ " + n + " บิล…", "syncing");
+  }
+  window.addEventListener("online", function () { toast("อินเทอร์เน็ตกลับมาแล้ว กำลังซิงค์ข้อมูล…"); flushPendingSales().then(function () { return refreshAll(true); }); });
+  window.addEventListener("offline", function () { updateConnectionBadge(); toastError("ไม่มีอินเทอร์เน็ต ระบบขายยังใช้งานได้ตามปกติ และจะซิงค์อัตโนมัติเมื่อเน็ตกลับมา"); });
+
+  function flushPendingSales() {
+    if (state.pendingSales.length === 0 || !sb) return Promise.resolve();
+    var queue = state.pendingSales.slice();
+    var chain = Promise.resolve();
+    queue.forEach(function (q) {
+      chain = chain.then(function () {
+        return apiCall(Object.assign({ action: "checkout" }, q.payload)).then(function () {
+          state.pendingSales = state.pendingSales.filter(function (x) { return x.saleId !== q.saleId; });
+          saveQueue();
+        }).catch(function (e) {
+          if (!e.isOffline) {
+            // ข้อมูลมีปัญหาจริง (ไม่ใช่แค่ออฟไลน์) ตัดออกจากคิวเพื่อไม่ให้ค้างตลอดไป แล้วเตือนผู้ใช้
+            state.pendingSales = state.pendingSales.filter(function (x) { return x.saleId !== q.saleId; });
+            saveQueue();
+            toastError("ซิงค์บิลหนึ่งรายการไม่สำเร็จ: " + errText(e.message));
+          }
+          return Promise.reject(e); // หยุดคิวถ้ายังออฟไลน์อยู่ ลำดับการขายจะไม่สลับกัน
+        });
+      });
+    });
+    return chain.catch(function () {}).finally(function () { updateConnectionBadge(); });
+  }
+
+  function mapRow(map) {
+    return function (r) { var o = {}; Object.keys(map).forEach(function (k) { var col = map[k]; o[k] = typeof col === "function" ? col(r) : r[col]; }); return o; };
+  }
+  var num = function (v) { return Number(v) || 0; };
+  var txt = function (v) { return v == null ? "" : String(v); };
+
+  function fetchAll() {
+    return Promise.all([
+      sb.from("products").select("*"),
+      sb.from("sales").select("*").order("timestamp", { ascending: false }).limit(1000),
+      sb.from("credit_payments").select("*").order("timestamp", { ascending: false }),
+      sb.from("deliveries").select("*").order("created_at", { ascending: false }),
+      sb.from("stock_log").select("*").order("timestamp", { ascending: false }).limit(1000),
+      sb.from("shop_log").select("*").order("timestamp", { ascending: false }).limit(300),
+      sb.from("employees").select("*"),
+      sb.from("attendance").select("*").order("clock_in", { ascending: false }).limit(500),
+      sb.from("payroll").select("*").order("timestamp", { ascending: false }),
+      sb.from("settings").select("*")
+    ]).then(function (r) {
+      for (var i = 0; i < r.length; i++) if (r[i].error) throw new Error(r[i].error.message || "bad_response");
+      var out = {};
+      out.products = r[0].data.map(mapRow({ id: "id", name: "name", barcode: function (x) { return txt(x.barcode); }, price: function (x) { return num(x.price); }, cost: function (x) { return num(x.cost); }, stock: function (x) { return num(x.stock); }, category: function (x) { return txt(x.category); }, zone: function (x) { return txt(x.zone); } }));
+      out.sales = r[1].data.map(mapRow({
+        id: "id", timestamp: "timestamp", items: function (x) { return x.items || []; }, total: function (x) { return num(x.total); }, profit: function (x) { return num(x.profit); },
+        paymentMethod: function (x) { return txt(x.payment_method); }, cashReceived: function (x) { return x.cash_received; }, change: function (x) { return x.change; },
+        type: function (x) { return x.type || "sale"; }, refSaleId: function (x) { return txt(x.ref_sale_id); },
+        customerName: function (x) { return txt(x.customer_name); }, customerContact: function (x) { return txt(x.customer_contact); },
+        creditPaid: function (x) { return num(x.credit_paid); }, creditStatus: function (x) { return txt(x.credit_status); },
+        deliveryFee: function (x) { return num(x.delivery_fee); }, deliveryId: function (x) { return txt(x.delivery_id); },
+        receiptNo: function (x) { return x.receipt_no; }
+      }));
+      out.creditPayments = r[2].data.map(mapRow({ id: "id", timestamp: "timestamp", saleId: function (x) { return x.sale_id; }, amount: function (x) { return num(x.amount); }, customerName: function (x) { return txt(x.customer_name); } }));
+      out.deliveries = r[3].data.map(mapRow({
+        id: "id", saleId: function (x) { return x.sale_id; }, createdAt: function (x) { return x.created_at; }, customerName: function (x) { return txt(x.customer_name); }, phone: function (x) { return txt(x.phone); },
+        village: function (x) { return txt(x.village); }, address: function (x) { return txt(x.address); }, distanceKm: function (x) { return num(x.distance_km); }, deliveryFee: function (x) { return num(x.delivery_fee); },
+        status: function (x) { return x.status || "pending"; }, vehicle: function (x) { return txt(x.vehicle); }, driver: function (x) { return txt(x.driver); },
+        dispatchedAt: function (x) { return x.dispatched_at; }, deliveredAt: function (x) { return x.delivered_at; }, note: function (x) { return txt(x.note); }
+      }));
+      out.stockLog = r[4].data.map(mapRow({ id: "id", timestamp: "timestamp", productId: function (x) { return x.product_id; }, productName: function (x) { return x.product_name; }, type: "type", qty: function (x) { return num(x.qty); }, note: function (x) { return txt(x.note); }, recordedAt: function (x) { return x.recorded_at; } }));
+      out.shopLog = r[5].data.map(mapRow({ id: "id", timestamp: "timestamp", action: "action", note: function (x) { return txt(x.note); } }));
+      out.employees = r[6].data.map(mapRow({ id: "id", name: "name", active: function (x) { return !!x.active; } }));
+      out.attendance = r[7].data.map(mapRow({ id: "id", employeeName: function (x) { return x.employee_name; }, clockIn: function (x) { return x.clock_in; }, clockOut: function (x) { return txt(x.clock_out); }, note: function (x) { return txt(x.note); } }));
+      out.payroll = r[8].data.map(mapRow({ id: "id", timestamp: "timestamp", employeeName: function (x) { return x.employee_name; }, amount: function (x) { return num(x.amount); }, note: function (x) { return txt(x.note); } }));
+      var settings = {}; r[9].data.forEach(function (row) { settings[row.key] = row.value; });
+      out.settings = settings;
+      return out;
+    });
+  }
+
+  function refreshAll(silent) {
+    if (!sb) return Promise.resolve();
+    if (!silent) setStatus("กำลังซิงค์…", "syncing");
+    state.refreshing = true;
+    if (state.pendingSales.length > 0 && isOnline()) flushPendingSales();
+    return fetchAll().then(function (res) {
+      state.products = res.products || [];
+      state.products.sort(function (a, b) { return a.name.localeCompare(b.name, "th"); });
+      state.sales = res.sales || []; state.payroll = res.payroll || []; state.deliveries = res.deliveries || [];
+      state.stockLog = res.stockLog || []; state.shopLog = res.shopLog || []; state.employees = res.employees || [];
+      state.attendance = res.attendance || []; state.creditPayments = res.creditPayments || [];
+      var s = res.settings || {};
+      state.settings = { deliveryBaseFee: Number(s.deliveryBaseFee) || 0, deliveryBaseKm: Number(s.deliveryBaseKm) || 0, deliveryPerKm: Number(s.deliveryPerKm) || 0 };
+      state.saleMap = {}; state.sales.forEach(function (x) { state.saleMap[x.id] = x; });
+      state.dupMap = {};
+      state.products.forEach(function (p) { var k = normName(p.name); (state.dupMap[k] = state.dupMap[k] || []).push(p); });
+      state.cacheSavedAt = null;
+      saveCache();
+      applyPendingSalesToState();
+      setStatus(state.pendingSales.length ? "🔄 ซิงค์แล้ว (รอส่ง " + state.pendingSales.length + " บิล)" : "ซิงค์แล้ว", null);
+      $("offlineBanner").classList.remove("show");
+      pruneCart();
+      renderAll();
+    }).catch(function (e) {
+      var cached = loadCache();
+      if (cached) {
+        applyCache(cached);
+        updateConnectionBadge();
+        var b1 = $("offlineBanner");
+        b1.className = "banner show offline-mode";
+        b1.textContent = "📴 ออฟไลน์ — แสดงข้อมูลล่าสุดเมื่อ " + fmtDT(cached.savedAt) + " การขายใหม่จะบันทึกไว้ในเครื่องและซิงค์อัตโนมัติเมื่อมีอินเทอร์เน็ต";
+        renderAll();
+      } else {
+        setStatus("เชื่อมต่อไม่ได้", "offline");
+        var b2 = $("offlineBanner");
+        b2.className = "banner show";
+        b2.textContent = "เชื่อมต่อ Supabase ไม่ได้ครั้งแรก: " + (e && e.message ? e.message : "ตรวจสอบ URL/anon key หรืออินเทอร์เน็ต") + " — แตะสถานะด้านบนเพื่อแก้ไขการเชื่อมต่อ (ตรวจว่ารัน supabase_schema.sql ครบแล้วด้วย)";
+      }
+    }).finally(function () { state.refreshing = false; });
+  }
+
+  function renderAll() {
+    renderShopBar(); renderProducts(); renderProductList(); renderDeliveries(); renderSalesReport();
+    renderMore(); renderCreditList(); renderAttendance(); renderPayrollList(); renderShopLog(); renderNavBadges(); fillDatalists();
+    renderCart();
+  }
+
+  function pruneCart() {
+    state.cart = state.cart.filter(function (line) {
+      var p = state.products.find(function (x) { return x.id === line.productId; });
+      if (!p) return false;
+      if (line.qty > p.stock) line.qty = p.stock;
+      return line.qty > 0;
+    });
+  }
+
+  // ---------------- setup ----------------
+  function showSetup() { $("setupBox").style.display = "block"; $("app").style.display = "none"; }
+  function showApp() { $("setupBox").style.display = "none"; $("app").style.display = "flex"; }
+  function buildClient() {
+    if (!state.supabaseUrl || !state.supabaseKey || typeof supabase === "undefined") { sb = null; return; }
+    sb = supabase.createClient(state.supabaseUrl, state.supabaseKey);
+  }
+  $("setupSaveBtn").addEventListener("click", function () {
+    var url = $("setupUrlInput").value.trim(), key = $("setupKeyInput").value.trim();
+    if (!url || !key) { toastError("กรุณากรอก Project URL และ anon key ให้ครบ"); return; }
+    localStorage.setItem(SB_URL_KEY, url); localStorage.setItem(SB_KEY_KEY, key);
+    state.supabaseUrl = url; state.supabaseKey = key;
+    buildClient(); showApp(); boot();
+  });
+  $("statusPill").addEventListener("click", function () {
+    $("setupUrlInput").value = state.supabaseUrl; $("setupKeyInput").value = state.supabaseKey; showSetup();
+  });
+
+  // ---------------- navigation ----------------
+  var SUB_VIEWS = ["credit", "attendance", "payroll", "shoplog", "settings"];
+  function showView(v) {
+    state.activeView = v;
+    var navKey = SUB_VIEWS.indexOf(v) >= 0 ? "more" : v;
+    document.querySelectorAll(".navbtn").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-view") === navKey); });
+    document.querySelectorAll(".view").forEach(function (sec) { sec.classList.toggle("active", sec.id === "view-" + v); });
+    if (v === "settings") fillSettingsForm();
+    if (v !== "sell") refreshAll(true);
+  }
+  document.querySelectorAll(".navbtn").forEach(function (btn) { btn.addEventListener("click", function () { showView(btn.getAttribute("data-view")); }); });
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest("[data-goto]"); if (g) showView(g.getAttribute("data-goto"));
+  });
+
+  // ---------------- shop open/close ----------------
+  function shopState() {
+    var last = state.shopLog[0];
+    return last ? { known: true, open: last.action === "open", since: last.timestamp } : { known: false, open: false, since: null };
+  }
+  function renderShopBar() {
+    var s = shopState(), bar = $("shopBar"), now = Date.now();
+    bar.className = "shopbar " + (s.open ? "open" : "closed");
+    if (s.open) {
+      $("shopStatusText").textContent = "🟢 ร้านเปิดอยู่";
+      $("shopStatusSub").textContent = "เปิดตั้งแต่ " + fmtTime(s.since) + " (" + fmtDur(now - ms(s.since)) + ")";
+      $("shopToggleBtn").textContent = "ปิดร้าน";
+    } else {
+      $("shopStatusText").textContent = "🔴 ร้านปิดอยู่";
+      $("shopStatusSub").textContent = s.known ? "ปิดเมื่อ " + fmtDT(s.since) : "ยังไม่เคยบันทึกเปิด-ปิดร้าน";
+      $("shopToggleBtn").textContent = "เปิดร้าน";
+    }
+  }
+  $("shopToggleBtn").addEventListener("click", function () {
+    var s = shopState();
+    if (!s.open) {
+      apiCall({ action: "setShopStatus", status: "open" }).then(function () { soundSuccess(); toast("เปิดร้านแล้ว"); return refreshAll(true); }).catch(fail);
+      return;
+    }
+    var since = ms(s.since);
+    var mine = state.sales.filter(function (x) { return ms(x.timestamp) >= since; });
+    var rev = mine.reduce(function (a, x) { return a + x.total; }, 0);
+    var bills = mine.filter(function (x) { return x.type !== "return"; }).length;
+    var summary = "ยอดขายวันนี้ " + money(rev) + " (" + bills + " บิล)";
+    askConfirm("ปิดร้าน", "ต้องการปิดร้านตอนนี้ใช่หรือไม่\n" + summary, "ปิดร้าน", function () {
+      apiCall({ action: "setShopStatus", status: "close", summary: summary }).then(function () { toast("ปิดร้านแล้ว"); return refreshAll(true); }).catch(fail);
+    }, true);
+  });
+
+  function renderShopLog() {
+    var asc = state.shopLog.slice().sort(function (a, b) { return ms(a.timestamp) - ms(b.timestamp); });
+    var sessions = [], cur = null;
+    asc.forEach(function (e) {
+      if (e.action === "open") { if (!cur) cur = { open: e.timestamp, close: null }; }
+      else if (e.action === "close" && cur) { cur.close = e.timestamp; sessions.push(cur); cur = null; }
+    });
+    if (cur) sessions.push(cur);
+    sessions.reverse();
+    var list = $("shopLogList"), empty = $("shopLogEmpty");
+    if (sessions.length === 0) { list.innerHTML = ""; empty.style.display = "block"; return; }
+    empty.style.display = "none";
+    list.innerHTML = sessions.slice(0, 60).map(function (s) {
+      var d = new Date(s.open);
+      var day = d.toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short" });
+      var dur = s.close ? fmtDur(ms(s.close) - ms(s.open)) : "กำลังเปิดอยู่ · " + fmtDur(Date.now() - ms(s.open));
+      return '<div class="card"><div class="card-top"><div><div class="c-title">' + esc(day) + '</div>' +
+        '<div class="c-meta">เปิด ' + fmtTime(s.open) + ' → ' + (s.close ? 'ปิด ' + fmtTime(s.close) : '<b>ยังไม่ปิด</b>') + '</div></div>' +
+        '<div class="c-amt">' + esc(dur) + '</div></div></div>';
+    }).join("");
+  }
+
+  // ---------------- datalists / badges / more ----------------
+  function activeEmployees() { return state.employees.filter(function (e) { return e.active; }); }
+  function fillDatalists() {
+    var zones = uniq(state.products.map(function (p) { return p.zone; })).sort(function (a, b) { return a.localeCompare(b, "th"); });
+    $("zoneList").innerHTML = zones.map(function (z) { return '<option value="' + esc(z) + '">'; }).join("");
+    var zf = $("zoneFilter"), cur = state.zoneFilter;
+    zf.innerHTML = '<option value="">ทุกโซน</option><option value="__none">ยังไม่ระบุโซน</option>' + zones.map(function (z) { return '<option value="' + esc(z) + '">' + esc(z) + '</option>'; }).join("");
+    zf.value = cur;
+    $("employeeList").innerHTML = activeEmployees().map(function (e) { return '<option value="' + esc(e.name) + '">'; }).join("");
+  }
+  function outstandingTotal() {
+    return state.sales.filter(function (s) { return s.type === "sale" && s.creditStatus === "unpaid"; })
+      .reduce(function (a, s) { return a + (s.total - (s.creditPaid || 0)); }, 0);
+  }
+  function workingNow() { return uniq(state.attendance.filter(function (a) { return !a.clockOut; }).map(function (a) { return a.employeeName; })); }
+  function renderNavBadges() {
+    var n = state.deliveries.filter(function (d) { return d.status === "pending" || d.status === "dispatched"; }).length;
+    var b = $("deliveryBadge"); b.textContent = n; b.classList.toggle("show", n > 0);
+    $("moreBadge").classList.toggle("show", outstandingTotal() > 0);
+  }
+  function renderMore() {
+    var out = outstandingTotal();
+    $("moreCreditSub").textContent = out > 0 ? "ค้างรับ " + money(out) : "ไม่มียอดค้าง";
+    var w = workingNow().length;
+    $("moreAttSub").textContent = w > 0 ? "กำลังทำงาน " + w + " คน" : "ยังไม่มีคนเข้างาน";
+    var mstart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    var paid = state.payroll.filter(function (p) { return ms(p.timestamp) >= mstart; }).reduce(function (a, p) { return a + p.amount; }, 0);
+    $("morePayrollSub").textContent = "จ่ายแล้วเดือนนี้ " + money(paid);
+    var s = shopState();
+    $("moreShopSub").textContent = s.open ? "เปิดอยู่ตั้งแต่ " + fmtTime(s.since) : (s.known ? "ปิดอยู่" : "ยังไม่มีข้อมูล");
+    var st = state.settings;
+    $("moreSettingsSub").textContent = (st.deliveryBaseFee || st.deliveryPerKm) ? "เริ่มต้น " + money(st.deliveryBaseFee) + " · เกิน กม.ละ " + money(st.deliveryPerKm) : "ยังไม่ได้ตั้งอัตราค่าจัดส่ง";
+  }
+
+  // ---------------- SELL ----------------
+  var searchInput = $("searchInput");
+  searchInput.addEventListener("input", function () { state.productQuery = searchInput.value.trim(); renderProducts(); });
+  searchInput.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter") return; e.preventDefault();
+    var q = searchInput.value.trim(); if (!q) return;
+    var byBarcode = state.products.find(function (p) { return p.barcode && p.barcode === q; });
+    if (byBarcode) { addToCart(byBarcode); searchInput.value = ""; state.productQuery = ""; renderProducts(); return; }
+    var matches = state.products.filter(function (p) { return p.name.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+    if (matches.length === 1) { addToCart(matches[0]); searchInput.value = ""; state.productQuery = ""; renderProducts(); }
+    else toastError("ไม่พบสินค้า");
+  });
+
+  function matchesQuery(p, q) {
+    q = q.toLowerCase();
+    return !q || p.name.toLowerCase().indexOf(q) !== -1 || (p.barcode && p.barcode.indexOf(q) !== -1) || (p.zone && p.zone.toLowerCase().indexOf(q) !== -1);
+  }
+
+  function renderProducts() {
+    var grid = $("productGrid"), emptyEl = $("sellEmptyState");
+    var list = state.products.filter(function (p) { return matchesQuery(p, state.productQuery); });
+    if (state.products.length === 0) { grid.innerHTML = ""; emptyEl.style.display = "block"; emptyEl.innerHTML = 'ยังไม่มีสินค้าในระบบ<br>ไปที่แท็บ "สินค้า" เพื่อเริ่มเพิ่มสินค้า'; return; }
+    if (list.length === 0) { grid.innerHTML = ""; emptyEl.style.display = "block"; emptyEl.innerHTML = "ไม่พบสินค้าที่ค้นหา"; return; }
+    emptyEl.style.display = "none";
+    grid.innerHTML = list.map(function (p) {
+      var low = p.stock <= 3, out = p.stock <= 0;
+      return '<button class="product-card" data-id="' + esc(p.id) + '" ' + (out ? "disabled" : "") + '>' +
+        '<div class="pname">' + esc(p.name) + '</div>' +
+        (p.zone ? '<div class="pzone">📍 ' + esc(p.zone) + '</div>' : '') +
+        '<div class="pstock' + (low ? " low" : "") + '">' + (out ? "หมด" : "คงเหลือ " + p.stock) + '</div>' +
+        '<div class="pprice">' + money(p.price) + '</div></button>';
+    }).join("");
+  }
+  $("productGrid").addEventListener("click", function (e) {
+    var card = e.target.closest(".product-card"); if (!card) return;
+    var p = state.products.find(function (x) { return x.id === card.getAttribute("data-id"); });
+    if (p) addToCart(p);
+  });
+
+  function addToCart(product) {
+    if (product.stock <= 0) { toastError("สินค้าหมด"); return; }
+    var line = state.cart.find(function (c) { return c.productId === product.id; });
+    if (line) { if (line.qty + 1 > product.stock) { toastError("มีสต็อกไม่พอ"); return; } line.qty += 1; }
+    else state.cart.push({ productId: product.id, name: product.name, price: product.price, cost: product.cost || 0, zone: product.zone || "", qty: 1 });
+    soundAdd(); renderCart();
+  }
+  function cartTotal() { return state.cart.reduce(function (s, c) { return s + c.price * c.qty; }, 0); }
+  function cartCount() { return state.cart.reduce(function (s, c) { return s + c.qty; }, 0); }
+
+  function cartLinesHtml() {
+    if (state.cart.length === 0) return '<div class="empty-state">ยังไม่มีสินค้าในตะกร้า<br>แตะสินค้าเพื่อเพิ่มลงตะกร้า</div>';
+    return state.cart.map(function (c) {
+      return '<div class="cart-line" data-id="' + esc(c.productId) + '">' +
+        '<div class="cl-info"><div class="cl-name">' + esc(c.name) + '</div>' +
+        (c.zone ? '<div class="cl-zone">📍 ' + esc(c.zone) + '</div>' : '') +
+        '<div class="cl-price">' + money(c.price) + ' x ' + c.qty + ' = ' + money(c.price * c.qty) + '</div></div>' +
+        '<div class="qty-stepper"><button data-act="minus">−</button><span>' + c.qty + '</span><button data-act="plus">+</button></div>' +
+        '<button class="cl-remove" data-act="remove" title="ลบ">✕</button></div>';
+    }).join("");
+  }
+  function cartAction(e) {
+    var btn = e.target.closest("[data-act]"); if (!btn) return;
+    var row = btn.closest(".cart-line"); if (!row) return;
+    var id = row.getAttribute("data-id"), act = btn.getAttribute("data-act");
+    var line = state.cart.find(function (c) { return c.productId === id; }); if (!line) return;
+    var product = state.products.find(function (p) { return p.id === id; });
+    var max = product ? product.stock : 9999;
+    if (act === "remove") state.cart = state.cart.filter(function (c) { return c.productId !== id; });
+    else if (act === "minus") { line.qty -= 1; if (line.qty <= 0) state.cart = state.cart.filter(function (c) { return c.productId !== id; }); }
+    else if (act === "plus") { if (line.qty + 1 > max) { toastError("มีสต็อกไม่พอ"); return; } line.qty += 1; }
+    renderCart();
+  }
+  $("cartItemsDesktop").addEventListener("click", cartAction);
+  $("cartItemsMobile").addEventListener("click", cartAction);
+
+  function renderCart() {
+    var total = cartTotal(), html = cartLinesHtml();
+    $("cartItemsDesktop").innerHTML = html; $("cartItemsMobile").innerHTML = html;
+    $("cartTotalDesktop").textContent = money(total); $("cartTotalMobile").textContent = money(total);
+    $("checkoutBtnDesktop").disabled = state.cart.length === 0; $("checkoutBtnMobile").disabled = state.cart.length === 0;
+    $("cartFabLabel").textContent = "ตะกร้า " + cartCount() + " รายการ"; $("cartFabTotal").textContent = money(total);
+  }
+  function openSheet() { $("cartSheet").classList.add("open"); $("cartSheetOverlay").classList.add("open"); }
+  function closeSheet() { $("cartSheet").classList.remove("open"); $("cartSheetOverlay").classList.remove("open"); }
+  $("cartFab").addEventListener("click", openSheet);
+  $("cartSheetOverlay").addEventListener("click", closeSheet);
+
+  // ---------------- payment ----------------
+  $("checkoutBtnDesktop").addEventListener("click", openPaymentModal);
+  $("checkoutBtnMobile").addEventListener("click", openPaymentModal);
+
+  function calcFee(km) {
+    var s = state.settings;
+    if (!(km > 0) || (!s.deliveryBaseFee && !s.deliveryPerKm)) return null;
+    return Math.ceil(s.deliveryBaseFee + Math.max(0, km - s.deliveryBaseKm) * s.deliveryPerKm);
+  }
+  function selectPayMethod(m) {
+    state.paymentMethod = m; state.qrAuto = true;
+    $("payMethodCash").classList.toggle("selected", m === "cash");
+    $("payMethodQr").classList.toggle("selected", m === "qr");
+    $("payMethodCredit").classList.toggle("selected", m === "credit");
+    $("fAmountPaid").value = "";
+    updatePaymentUI();
+  }
+  function payTotals() {
+    var items = cartTotal(), deliv = $("deliveryToggle").checked;
+    var fee = deliv ? Math.max(0, parseFloat($("fDeliveryFee").value) || 0) : 0;
+    return { items: items, fee: fee, total: r2(items + fee), deliv: deliv };
+  }
+  function updatePaymentUI() {
+    var t = payTotals(), m = state.paymentMethod;
+    $("deliveryBox").style.display = t.deliv ? "block" : "none";
+    $("payTotalAmt").textContent = money(t.total);
+    $("payBreakdown").textContent = t.deliv && t.fee > 0 ? "ค่าสินค้า " + money(t.items) + " + ค่าจัดส่ง " + money(t.fee) : "ยอดที่ต้องชำระ";
+    var st = state.settings;
+    $("feeHint").textContent = (st.deliveryBaseFee || st.deliveryPerKm)
+      ? "อัตรา: " + money(st.deliveryBaseFee) + " ไม่เกิน " + st.deliveryBaseKm + " กม. เกินกิโลเมตรละ " + money(st.deliveryPerKm) + " (แก้ค่าจัดส่งเองได้)"
+      : "ยังไม่ได้ตั้งอัตราค่าจัดส่ง — กรอกค่าจัดส่งเอง หรือตั้งอัตราที่ เพิ่มเติม › ตั้งค่าค่าจัดส่ง";
+
+    var paid = 0, balance = t.total, msg = "", cls = "ok", showAmount = m !== "credit", typed = false;
+    if (m === "credit") { paid = 0; balance = t.total; typed = true; }
+    else {
+      if (m === "qr" && state.qrAuto) $("fAmountPaid").value = t.total;
+      $("amountLabel").textContent = m === "cash" ? "รับเงินมา (฿)" : "ยอดที่โอนแล้ว (฿)";
+      var v = parseFloat($("fAmountPaid").value) || 0;
+      if (v <= 0) { msg = m === "cash" ? "กรอกจำนวนเงินที่รับมา" : "กรอกยอดที่โอนแล้ว"; paid = 0; balance = t.total; }
+      else if (v >= t.total) {
+        typed = true; paid = t.total; balance = 0;
+        if (m === "cash") msg = v > t.total ? "เงินทอน " + money(v - t.total) : "รับเงินพอดี";
+        else if (v > t.total) { msg = "ยอดโอนเกินยอดขาย " + money(v - t.total); cls = "short"; }
+        else msg = "ชำระครบ";
+      } else { typed = true; paid = v; balance = r2(t.total - v); msg = "รับไม่ครบ ค้างอีก " + money(balance) + " (บันทึกเป็นค้างจ่าย)"; cls = "short"; }
+    }
+    $("amountBox").style.display = showAmount ? "block" : "none";
+    var cd = $("changeDisplay"); cd.className = "change-display " + cls; cd.textContent = msg;
+
+    var needCustomer = t.deliv || m === "credit" || (typed && balance > 0.009);
+    $("customerBox").style.display = needCustomer ? "block" : "none";
+    var reasons = [];
+    if (t.deliv) reasons.push("จัดส่ง (ต้องมีชื่อและเบอร์โทร)");
+    if (m === "credit" || (typed && balance > 0.009)) reasons.push("มียอดค้างชำระ (ต้องมีชื่อลูกค้า)");
+    $("customerReason").textContent = reasons.join(" · ");
+    $("phoneLabel").textContent = t.deliv ? "เบอร์โทร *" : "เบอร์โทร";
+    return { totals: t, paid: paid, balance: balance };
+  }
+
+  function openPaymentModal() {
+    if (state.cart.length === 0) return;
+    ["fAmountPaid", "fCustomerName", "fCustomerPhone", "fVillage", "fAddress", "fDistance", "fDeliveryFee", "fDeliveryNote"].forEach(function (id) { $(id).value = ""; });
+    $("deliveryToggle").checked = false;
+    selectPayMethod("cash");
+    $("paymentModalOverlay").classList.add("open");
+    setTimeout(function () { $("fAmountPaid").focus(); }, 60);
+  }
+  $("cancelPaymentBtn").addEventListener("click", function () { $("paymentModalOverlay").classList.remove("open"); });
+  $("payMethodCash").addEventListener("click", function () { selectPayMethod("cash"); });
+  $("payMethodQr").addEventListener("click", function () { selectPayMethod("qr"); });
+  $("payMethodCredit").addEventListener("click", function () { selectPayMethod("credit"); });
+  $("deliveryToggle").addEventListener("change", updatePaymentUI);
+  $("fAmountPaid").addEventListener("input", function () { state.qrAuto = false; updatePaymentUI(); });
+  $("fDeliveryFee").addEventListener("input", updatePaymentUI);
+  $("fDistance").addEventListener("input", function () {
+    var fee = calcFee(parseFloat($("fDistance").value) || 0);
+    if (fee !== null) $("fDeliveryFee").value = fee;
+    updatePaymentUI();
+  });
+
+  $("confirmPaymentBtn").addEventListener("click", function () {
+    var u = updatePaymentUI(), t = u.totals, m = state.paymentMethod;
+    var name = $("fCustomerName").value.trim(), phone = $("fCustomerPhone").value.trim();
+    var received = parseFloat($("fAmountPaid").value) || 0;
+    if (m !== "credit") {
+      if (received <= 0) { toastError(m === "cash" ? "กรอกจำนวนเงินที่รับมา (หรือเลือก \"ค้างทั้งหมด\")" : "กรอกยอดที่โอนแล้ว"); return; }
+      if (m === "qr" && received > t.total) { toastError("ยอดโอนเกินยอดขาย"); return; }
+    }
+    var needCustomer = t.deliv || m === "credit" || u.balance > 0.009;
+    if (needCustomer && !name) { toastError("กรุณากรอกชื่อลูกค้า"); return; }
+    var address = $("fAddress").value.trim();
+    if (t.deliv) {
+      if (!phone) { toastError("กรุณากรอกเบอร์โทรลูกค้า"); return; }
+      if (!address) { toastError("กรุณากรอกที่อยู่จัดส่ง"); return; }
+    }
+    var items = state.cart.map(function (c) { return { productId: c.productId, name: c.name, price: c.price, cost: c.cost || 0, qty: c.qty, subtotal: c.price * c.qty }; });
+    var saleId = genId();
+    var delivery = t.deliv ? { village: $("fVillage").value.trim(), address: address, distanceKm: parseFloat($("fDistance").value) || 0, note: $("fDeliveryNote").value.trim() } : null;
+    var deliveryId = delivery ? genId() : null;
+    var payload = {
+      action: "checkout", saleId: saleId, deliveryId: deliveryId, items: items,
+      deliveryFee: t.fee, paymentMethod: m, amountPaid: u.paid,
+      cashReceived: m === "cash" ? received : null, change: m === "cash" ? Math.max(0, r2(received - t.total)) : null,
+      customerName: name, customerContact: phone, delivery: delivery
+    };
+    var profit = items.reduce(function (s, it) { return s + (it.price - it.cost) * it.qty; }, 0);
+    var receiptBase = {
+      items: items, itemsTotal: t.items, deliveryFee: t.fee, total: t.total, timestamp: new Date().toISOString(),
+      paymentMethod: m, cashReceived: payload.cashReceived, change: payload.change, amountPaid: u.paid, balance: u.balance,
+      customerName: name, phone: phone, delivery: delivery
+    };
+    $("paymentModalOverlay").classList.remove("open");
+    var btns = [$("checkoutBtnDesktop"), $("checkoutBtnMobile")];
+    btns.forEach(function (b) { b.disabled = true; b.textContent = "กำลังทำรายการ…"; });
+    apiCall(payload).then(function (res) {
+      state.cart = []; renderCart(); closeSheet(); soundSuccess();
+      toast("ขายสำเร็จ ยอดรวม " + money(t.total));
+      printReceipt(Object.assign({ receiptNo: res.receiptNo }, receiptBase));
+      return refreshAll(true);
+    }).catch(function (e) {
+      if (!e.isOffline) { fail(e); return; }
+      // ออฟไลน์: บันทึกการขายไว้ในเครื่อง ตัดสต็อกทันที แล้วซิงค์อัตโนมัติเมื่อเน็ตกลับมา
+      state.pendingSales.push({ saleId: saleId, createdAt: receiptBase.timestamp, payload: payload, total: t.total, profit: profit,
+        creditPaid: m === "credit" ? 0 : (u.balance > 0.009 ? u.paid : 0), creditStatus: m === "credit" || u.balance > 0.009 ? "unpaid" : "" });
+      saveQueue();
+      applyPendingSalesToState();
+      updateConnectionBadge();
+      state.cart = []; renderCart(); closeSheet(); soundSuccess();
+      renderAll();
+      toast("บันทึกการขายแบบออฟไลน์ไว้แล้ว (฿" + fmt.format(t.total) + ") จะซิงค์อัตโนมัติเมื่อมีอินเทอร์เน็ต");
+      printReceipt(Object.assign({ pending: true }, receiptBase));
+    }).finally(function () {
+      btns.forEach(function (b) { b.textContent = "ชำระเงิน"; b.disabled = state.cart.length === 0; });
+    });
+  });
+
+  // ---------------- products ----------------
+  $("productSearchInput").addEventListener("input", function () { state.productListQuery = this.value.trim(); renderProductList(); });
+  $("zoneFilter").addEventListener("change", function () { state.zoneFilter = this.value; renderProductList(); });
+  $("dupChip").addEventListener("click", function () { state.dupOnly = !state.dupOnly; renderProductList(); });
+
+  function isDup(p) { var g = state.dupMap[normName(p.name)]; return g && g.length > 1; }
+
+  function renderProductList() {
+    var container = $("productList"), emptyEl = $("productsEmptyState");
+    var dupCount = state.products.filter(isDup).length;
+    var chip = $("dupChip");
+    chip.style.display = dupCount > 0 ? "inline-block" : "none";
+    chip.textContent = "⚠ ชื่อซ้ำ (" + dupCount + ")";
+    chip.classList.toggle("active", state.dupOnly);
+    if (dupCount === 0) state.dupOnly = false;
+
+    var list = state.products.filter(function (p) {
+      if (!matchesQuery(p, state.productListQuery)) return false;
+      if (state.zoneFilter === "__none" && p.zone) return false;
+      if (state.zoneFilter && state.zoneFilter !== "__none" && p.zone !== state.zoneFilter) return false;
+      if (state.dupOnly && !isDup(p)) return false;
+      return true;
+    });
+    if (state.dupOnly) list.sort(function (a, b) { return normName(a.name).localeCompare(normName(b.name)); });
+    if (state.products.length === 0) { container.innerHTML = ""; emptyEl.style.display = "block"; emptyEl.innerHTML = 'ยังไม่มีสินค้า<br>กด "+ เพิ่มสินค้า" เพื่อเริ่มต้น'; return; }
+    if (list.length === 0) { container.innerHTML = ""; emptyEl.style.display = "block"; emptyEl.innerHTML = "ไม่พบสินค้าที่ค้นหา"; return; }
+    emptyEl.style.display = "none";
+    container.innerHTML = list.map(function (p) {
+      var meta = [];
+      meta.push(p.zone ? "📍 " + esc(p.zone) : "📍 ยังไม่ระบุโซน");
+      meta.push("บาร์โค้ด " + esc(p.barcode || "-"));
+      meta.push("คงเหลือ " + p.stock);
+      if (p.category) meta.push(esc(p.category));
+      return '<div class="card" data-id="' + esc(p.id) + '">' +
+        '<div class="card-top"><div><div class="c-title">' + esc(p.name) + '</div><div class="c-meta">' + meta.join(" · ") + '</div>' +
+        (isDup(p) ? '<span class="badge orange">⚠ ชื่อซ้ำ ' + state.dupMap[normName(p.name)].length + ' รายการ</span>' : '') +
+        (p.stock <= 3 ? '<span class="badge red">' + (p.stock <= 0 ? "หมดสต็อก" : "ใกล้หมด") + '</span>' : '') +
+        '</div><div class="c-amt">' + money(p.price) + '</div></div>' +
+        '<div class="row-actions">' +
+        '<button class="small-btn" data-act="recv">📥 รับเข้า</button>' +
+        '<button class="small-btn" data-act="hist">🕘 ประวัติ</button>' +
+        '<button class="small-btn" data-act="label">🏷 บาร์โค้ด</button>' +
+        '<button class="small-btn" data-act="edit">✎ แก้ไข</button>' +
+        '<button class="small-btn danger" data-act="del">🗑</button></div></div>';
+    }).join("");
+  }
+  $("productList").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-act]"); if (!btn) return;
+    var id = btn.closest(".card").getAttribute("data-id"), act = btn.getAttribute("data-act");
+    if (act === "edit") openProductModal(id);
+    else if (act === "del") confirmDeleteProduct(id);
+    else if (act === "label") openBarcodeLabelModal(id);
+    else if (act === "recv") openRecvModal(id);
+    else if (act === "hist") openHistoryModal(id);
+  });
+
+  function generateLocalBarcode() { return "29" + String(Date.now()).slice(-8) + String(Math.floor(Math.random() * 90) + 10); }
+  $("addProductBtn").addEventListener("click", function () { openProductModal(null); });
+  $("cancelProductBtn").addEventListener("click", function () { $("productModalOverlay").classList.remove("open"); });
+  $("genBarcodeBtn").addEventListener("click", function () { $("fBarcode").value = generateLocalBarcode(); });
+
+  function openProductModal(id) {
+    state.editingProductId = id;
+    ["errName", "errPrice", "errStock"].forEach(function (x) { $(x).classList.remove("show"); });
+    var p = id ? state.products.find(function (x) { return x.id === id; }) : null;
+    $("productModalTitle").textContent = p ? "แก้ไขสินค้า" : "เพิ่มสินค้า";
+    $("fName").value = p ? p.name : ""; $("fPrice").value = p ? p.price : ""; $("fCost").value = p && p.cost ? p.cost : "";
+    $("fStock").value = p ? p.stock : ""; $("fBarcode").value = p ? p.barcode : ""; $("fZone").value = p ? p.zone : ""; $("fCategory").value = p ? p.category : "";
+    $("productModalOverlay").classList.add("open");
+    setTimeout(function () { $("fName").focus(); }, 50);
+  }
+
+  $("saveProductBtn").addEventListener("click", function () {
+    var name = $("fName").value.trim(), price = parseFloat($("fPrice").value), cost = $("fCost").value === "" ? 0 : parseFloat($("fCost").value);
+    var stock = parseInt($("fStock").value, 10), barcode = $("fBarcode").value.trim().replace(/\s+/g, "");
+    var ok = true;
+    $("errName").classList.toggle("show", !name); if (!name) ok = false;
+    $("errPrice").classList.toggle("show", isNaN(price) || price < 0); if (isNaN(price) || price < 0) ok = false;
+    $("errStock").classList.toggle("show", isNaN(stock) || stock < 0); if (isNaN(stock) || stock < 0) ok = false;
+    if (!ok) { toastError("กรุณากรอกข้อมูลให้ครบถ้วน"); return; }
+    if (!barcode) barcode = generateLocalBarcode();
+
+    var payload = { id: state.editingProductId || undefined, name: name, price: price, cost: cost || 0, stock: stock, barcode: barcode, zone: $("fZone").value.trim(), category: $("fCategory").value.trim() };
+    var same = state.products.filter(function (p) { return p.id !== state.editingProductId && normName(p.name) === normName(name); });
+    var doSave = function () {
+      var btn = $("saveProductBtn"); btn.disabled = true; btn.textContent = "กำลังบันทึก…";
+      apiCall({ action: "saveProduct", product: payload }).then(function () {
+        $("productModalOverlay").classList.remove("open"); toast("บันทึกสินค้าแล้ว"); return refreshAll(true);
+      }).catch(fail).finally(function () { btn.disabled = false; btn.textContent = "บันทึก"; });
+    };
+    if (same.length > 0) {
+      var s = same[0];
+      askConfirm("พบชื่อสินค้าซ้ำ", "มีสินค้าชื่อ \"" + s.name + "\" อยู่แล้ว (บาร์โค้ด " + s.barcode + (s.zone ? " · โซน " + s.zone : "") + " · คงเหลือ " + s.stock + ")\nต้องการบันทึกซ้ำหรือไม่? หากเป็นสินค้าเดียวกัน ให้กด \"รับเข้า\" ที่สินค้าเดิมแทน", "บันทึกซ้ำ", doSave, false);
+    } else doSave();
+  });
+
+  function confirmDeleteProduct(id) {
+    var p = state.products.find(function (x) { return x.id === id; }); if (!p) return;
+    askConfirm("ลบสินค้า", "ต้องการลบ \"" + p.name + "\" ใช่หรือไม่ การลบไม่สามารถย้อนกลับได้", "ลบ", function () {
+      apiCall({ action: "deleteProduct", id: id }).then(function () { toast("ลบสินค้าแล้ว"); return refreshAll(true); }).catch(fail);
+    }, true);
+  }
+
+  // receive stock
+  function openRecvModal(id) {
+    var p = state.products.find(function (x) { return x.id === id; }); if (!p) return;
+    state.receiveProduct = p;
+    $("recvProductName").textContent = p.name + " (คงเหลือ " + p.stock + ")";
+    $("fRecvQty").value = ""; $("fRecvNote").value = ""; $("fRecvAt").value = toLocalInput(new Date());
+    $("recvModalOverlay").classList.add("open");
+    setTimeout(function () { $("fRecvQty").focus(); }, 60);
+  }
+  $("cancelRecvBtn").addEventListener("click", function () { $("recvModalOverlay").classList.remove("open"); });
+  $("confirmRecvBtn").addEventListener("click", function () {
+    var qty = parseInt($("fRecvQty").value, 10);
+    if (!(qty > 0)) { toastError("กรุณากรอกจำนวนที่รับ"); return; }
+    var at = $("fRecvAt").value ? new Date($("fRecvAt").value).toISOString() : new Date().toISOString();
+    var btn = this; btn.disabled = true;
+    apiCall({ action: "receiveStock", productId: state.receiveProduct.id, qty: qty, receivedAt: at, note: $("fRecvNote").value.trim() }).then(function () {
+      $("recvModalOverlay").classList.remove("open"); soundSuccess(); toast("บันทึกรับเข้า +" + qty + " แล้ว"); return refreshAll(true);
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  });
+
+  // product history
+  function openHistoryModal(id) {
+    var p = state.products.find(function (x) { return x.id === id; }); if (!p) return;
+    var ev = [];
+    state.stockLog.filter(function (l) { return l.productId === id; }).forEach(function (l) {
+      ev.push({ t: l.timestamp, icon: l.type === "receive" ? "📥" : "✏️",
+        main: (l.type === "receive" ? "รับเข้า +" : "ปรับสต็อก ") + l.qty, sub: l.note });
+    });
+    state.sales.forEach(function (s) {
+      (s.items || []).forEach(function (it) {
+        if (it.productId !== id) return;
+        if (s.type === "return") ev.push({ t: s.timestamp, icon: "↩️", main: "รับคืน +" + it.qty, sub: "" });
+        else ev.push({ t: s.timestamp, icon: "🧾", main: "ขายออก −" + it.qty, sub: (s.customerName ? "ลูกค้า " + s.customerName + " · " : "") + money(it.price) + "/หน่วย" });
+      });
+    });
+    state.deliveries.forEach(function (d) {
+      var sale = state.saleMap[d.saleId]; if (!sale) return;
+      var it = (sale.items || []).find(function (x) { return x.productId === id; }); if (!it) return;
+      if (d.dispatchedAt) ev.push({ t: d.dispatchedAt, icon: "🚚", main: "ออกส่ง " + it.qty + " ชิ้น → " + (d.customerName || "ลูกค้า"), sub: d.vehicle ? "รถ " + d.vehicle : "" });
+      if (d.deliveredAt) ev.push({ t: d.deliveredAt, icon: "✅", main: "ส่งถึงแล้ว → " + (d.customerName || "ลูกค้า"), sub: d.vehicle ? "รถ " + d.vehicle : "" });
+    });
+    ev.sort(function (a, b) { return ms(b.t) - ms(a.t); });
+    var lastRecv = ev.find(function (e) { return e.icon === "📥"; }), lastSold = ev.find(function (e) { return e.icon === "🧾"; });
+    $("historyTitle").textContent = p.name;
+    $("historySummary").innerHTML = "คงเหลือ " + p.stock + " · รับเข้าล่าสุด " + (lastRecv ? fmtDT(lastRecv.t) : "ไม่มีข้อมูล") + " · ขายล่าสุด " + (lastSold ? fmtDT(lastSold.t) : "ไม่มีข้อมูล");
+    $("historyList").innerHTML = ev.length === 0 ? '<div class="empty-state">ยังไม่มีประวัติ</div>' : ev.slice(0, 80).map(function (e) {
+      return '<div class="hist-item"><div class="hi-icon">' + e.icon + '</div><div class="hi-main">' + esc(e.main) +
+        (e.sub ? '<div class="hi-sub">' + esc(e.sub) + '</div>' : '') + '<div class="hi-sub">' + fmtDT(e.t) + '</div></div></div>';
+    }).join("");
+    $("historyModalOverlay").classList.add("open");
+  }
+  $("closeHistoryBtn").addEventListener("click", function () { $("historyModalOverlay").classList.remove("open"); });
+
+  // barcode label (ป้ายกระชับ: บาร์โค้ด + เลขบาร์โค้ด + ชื่อสินค้า เท่านั้น เรียงหลายดวงต่อแถวเพื่อประหยัดกระดาษ)
+  function openBarcodeLabelModal(id) {
+    var p = state.products.find(function (x) { return x.id === id; }); if (!p) return;
+    state.labelProduct = p;
+    $("barcodePreviewName").textContent = p.name;
+    try { JsBarcode("#barcodePreviewSvg", p.barcode, { format: "CODE128", displayValue: true, fontSize: 11, width: 1.4, height: 28, margin: 4 }); } catch (e) {}
+    $("barcodeModalOverlay").classList.add("open");
+  }
+  $("closeBarcodeModalBtn").addEventListener("click", function () { $("barcodeModalOverlay").classList.remove("open"); });
+  $("printBarcodeBtn").addEventListener("click", function () {
+    var p = state.labelProduct; if (!p) return;
+    var qty = Math.max(1, parseInt($("fLabelQty").value, 10) || 1);
+    // render บาร์โค้ดขนาดเล็กไว้ใน svg ชั่วคราว แล้วก็อปปี้ผลลัพธ์ซ้ำตามจำนวนที่ต้องการ (เร็วกว่าเรียก JsBarcode วนซ้ำ)
+    var tmp = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    tmp.id = "tmpLabelSvg";
+    document.body.appendChild(tmp);
+    try { JsBarcode(tmp, p.barcode, { format: "CODE128", displayValue: true, fontSize: 9, width: 1.1, height: 20, margin: 2 }); } catch (e) {}
+    var svgHtml = tmp.outerHTML.replace(' id="tmpLabelSvg"', "");
+    document.body.removeChild(tmp);
+
+    var cell = '<div class="label-cell"><div class="ln">' + esc(p.name) + '</div>' + svgHtml + '</div>';
+    $("printArea").innerHTML = '<div class="label-sheet">' + new Array(qty).fill(cell).join("") + '</div>';
+    setPrintPageSize(""); // ไม่บังคับขนาดกระดาษ ใช้ค่าที่เลือกในหน้าต่างพิมพ์ (A4/ป้ายสติกเกอร์ ฯลฯ)
+    setTimeout(function () { window.print(); }, 80);
+  });
+
+  // ---------------- receipt ----------------
+  function setPrintPageSize(sizeCss) {
+    var styleEl = document.getElementById("dynamicPageSize");
+    if (!styleEl) { styleEl = document.createElement("style"); styleEl.id = "dynamicPageSize"; document.head.appendChild(styleEl); }
+    styleEl.textContent = "@page { " + sizeCss + " margin:1mm; }";
+  }
+  function receiptNoText(r) {
+    if (r.pending) return "รอซิงค์";
+    if (r.receiptNo == null) return "-";
+    return String(r.receiptNo).padStart(6, "0");
+  }
+  function printReceipt(r) {
+    var d = r.timestamp ? new Date(r.timestamp) : new Date();
+    var dateStr = d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    var timeStr = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+    var lines = (r.items || []).map(function (it) {
+      return '<div class="r-line"><span class="r-name">' + esc(it.name) + ' x' + it.qty + '</span><span>' + money(it.subtotal != null ? it.subtotal : it.price * it.qty) + '</span></div>';
+    }).join("");
+    var fee = r.deliveryFee > 0 ? '<div class="r-line"><span class="r-name">ค่าจัดส่ง</span><span>' + money(r.deliveryFee) + '</span></div>' : "";
+    var pay = "";
+    if (r.paymentMethod === "cash" && r.cashReceived != null) {
+      pay += '<div class="r-pay"><span>รับเงิน</span><span>' + money(r.cashReceived) + '</span></div>';
+      if (r.change > 0) pay += '<div class="r-pay"><span>เงินทอน</span><span>' + money(r.change) + '</span></div>';
+    } else if (r.paymentMethod === "qr") pay += '<div class="r-pay"><span>สแกนจ่าย</span><span>' + money(r.amountPaid) + '</span></div>';
+    else if (r.paymentMethod === "credit") pay += '<div class="r-pay"><span>ค้างจ่ายทั้งหมด</span><span></span></div>';
+    if (r.balance > 0.009) pay += '<div class="r-pay"><b>ค้างชำระ</b><b>' + money(r.balance) + '</b></div>';
+    var cust = "";
+    if (r.customerName) cust += '<div class="r-note">ลูกค้า ' + esc(r.customerName) + (r.phone ? " " + esc(r.phone) : "") + '</div>';
+    if (r.delivery) cust += '<div class="r-note">ส่ง ' + esc((r.delivery.village ? r.delivery.village + " " : "") + r.delivery.address) + '</div>';
+    var pendingNote = r.pending ? '<div class="r-note" style="font-weight:700;">⏳ ยังไม่ซิงค์ขึ้นระบบ (ออฟไลน์)</div>' : "";
+    $("printArea").innerHTML =
+      '<div class="receipt">' +
+        '<div class="r-shop">' + esc(SHOP_NAME) + '</div>' +
+        '<div class="r-shopphone">โทร ' + esc(SHOP_PHONE) + '</div>' +
+        '<div class="r-meta"><span>เลขที่ ' + esc(receiptNoText(r)) + '</span><span>' + dateStr + ' ' + timeStr + '</span></div>' +
+        '<hr>' + lines + fee + '<hr>' +
+        '<div class="r-total"><span>รวม</span><span>' + money(r.total) + '</span></div>' + pay + cust + pendingNote +
+        '<div class="r-thanks">ขอบคุณที่ใช้บริการ</div>' +
+      '</div>';
+    setPrintPageSize("size:58mm auto;");
+    setTimeout(function () { window.print(); }, 80);
+  }
+  function receiptFromSale(s) {
+    var d = state.deliveries.find(function (x) { return x.saleId === s.id; });
+    var balance = s.creditStatus === "unpaid" ? s.total - (s.creditPaid || 0) : 0;
+    return { items: s.items, deliveryFee: s.deliveryFee, total: s.total, timestamp: s.timestamp, paymentMethod: s.paymentMethod,
+      cashReceived: s.cashReceived, change: s.change, amountPaid: s.total - balance, balance: balance,
+      customerName: s.customerName, phone: s.customerContact, receiptNo: s.receiptNo, pending: !!s.pending,
+      delivery: d ? { village: d.village, address: d.address } : null };
+  }
+
+  // ---------------- camera scan ----------------
+  var html5QrCode = null;
+  function openScanModal() {
+    $("scanModalOverlay").classList.add("open");
+    if (typeof Html5Qrcode === "undefined") { toastError("โหลดไลบรารีสแกนไม่สำเร็จ ตรวจสอบอินเทอร์เน็ต"); return; }
+    html5QrCode = new Html5Qrcode("readerContainer");
+    html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 240 }, onScanSuccess, function () {})
+      .catch(function () { toastError("เปิดกล้องไม่ได้: ตรวจสอบสิทธิ์กล้องและใช้ HTTPS"); });
+  }
+  function closeScanModal() {
+    $("scanModalOverlay").classList.remove("open");
+    if (html5QrCode) { html5QrCode.stop().then(function () { html5QrCode.clear(); }).catch(function () {}); html5QrCode = null; }
+  }
+  function onScanSuccess(text) {
+    soundScan();
+    var p = state.products.find(function (x) { return x.barcode && x.barcode === text; });
+    closeScanModal();
+    if (p) { addToCart(p); toast("เพิ่ม " + p.name + " ลงตะกร้าแล้ว"); }
+    else { toastError("ไม่พบสินค้าบาร์โค้ดนี้ — กรอกข้อมูลเพื่อเพิ่มสินค้าใหม่"); openProductModal(null); $("fBarcode").value = text; }
+  }
+  $("openCameraScanBtn").addEventListener("click", openScanModal);
+  $("closeScanBtn").addEventListener("click", closeScanModal);
+
+  // ---------------- returns ----------------
+  function openReturnModal(saleId) {
+    var sale = state.saleMap[saleId]; if (!sale) return;
+    state.pendingReturnSale = sale;
+    state.returnDraft = (sale.items || []).map(function (it) { return { productId: it.productId, name: it.name, price: it.price, cost: it.cost || 0, maxQty: it.qty, qty: 0 }; });
+    renderReturnLines(); $("returnModalOverlay").classList.add("open");
+  }
+  function renderReturnLines() {
+    $("returnLinesContainer").innerHTML = state.returnDraft.map(function (l, i) {
+      return '<div class="return-line" data-idx="' + i + '"><div class="rl-info">' + esc(l.name) + '<div class="rl-max">ซื้อ ' + l.maxQty + ' หน่วย</div></div>' +
+        '<div class="qty-stepper"><button data-act="minus">−</button><span>' + l.qty + '</span><button data-act="plus">+</button></div></div>';
+    }).join("");
+  }
+  $("returnLinesContainer").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var i = parseInt(b.closest(".return-line").getAttribute("data-idx"), 10), l = state.returnDraft[i];
+    if (b.getAttribute("data-act") === "minus" && l.qty > 0) l.qty--;
+    if (b.getAttribute("data-act") === "plus" && l.qty < l.maxQty) l.qty++;
+    renderReturnLines();
+  });
+  $("cancelReturnBtn").addEventListener("click", function () { $("returnModalOverlay").classList.remove("open"); });
+  $("confirmReturnBtn").addEventListener("click", function () {
+    var items = state.returnDraft.filter(function (l) { return l.qty > 0; }).map(function (l) { return { productId: l.productId, name: l.name, price: l.price, cost: l.cost, qty: l.qty }; });
+    if (items.length === 0) { toastError("กรุณาเลือกจำนวนที่จะคืน"); return; }
+    var btn = this; btn.disabled = true;
+    apiCall({ action: "returnSale", refSaleId: state.pendingReturnSale.id, items: items }).then(function () {
+      toast("รับคืนสินค้าแล้ว"); $("returnModalOverlay").classList.remove("open"); return refreshAll(true);
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  });
+
+  // ---------------- credit / partial payments ----------------
+  function renderCreditList() {
+    var credit = state.sales.filter(function (s) { return s.type === "sale" && (s.creditStatus === "unpaid" || s.creditStatus === "paid"); });
+    $("creditOutstandingTotal").textContent = money(outstandingTotal());
+    credit.sort(function (a, b) {
+      var au = a.creditStatus === "unpaid" ? 0 : 1, bu = b.creditStatus === "unpaid" ? 0 : 1;
+      return au !== bu ? au - bu : ms(b.timestamp) - ms(a.timestamp);
+    });
+    var list = $("creditList"), empty = $("creditEmptyState");
+    if (credit.length === 0) { list.innerHTML = ""; empty.style.display = "block"; empty.innerHTML = "ยังไม่มีรายการค้างจ่าย"; return; }
+    empty.style.display = "none";
+    list.innerHTML = credit.slice(0, 100).map(function (s) {
+      var remaining = s.total - (s.creditPaid || 0), paid = s.creditStatus === "paid";
+      var pays = state.creditPayments.filter(function (p) { return p.saleId === s.id; });
+      var payTxt = pays.length ? "ชำระแล้ว: " + pays.slice().reverse().map(function (p) { return fmtDT(p.timestamp) + " " + money(p.amount); }).join(" · ") : "";
+      return '<div class="card" data-id="' + esc(s.id) + '"><div class="card-top"><div>' +
+        '<div class="c-title">' + esc(s.customerName || "ไม่ระบุชื่อ") + (s.customerContact ? " · " + esc(s.customerContact) : "") + '</div>' +
+        '<div class="c-meta">' + fmtDT(s.timestamp) + ' · ยอดรวม ' + money(s.total) + (s.creditPaid > 0 ? ' · จ่ายแล้ว ' + money(s.creditPaid) : '') + '</div>' +
+        (payTxt ? '<div class="c-meta">' + esc(payTxt) + '</div>' : '') +
+        '<span class="badge ' + (paid ? "green" : "orange") + '">' + (paid ? "ชำระครบแล้ว" : "ค้างชำระ " + money(remaining)) + '</span></div>' +
+        '<div class="c-amt">' + money(paid ? 0 : remaining) + '</div></div>' +
+        (paid ? '' : '<div class="row-actions"><button class="small-btn primary" data-act="settle">💵 รับชำระ</button></div>') + '</div>';
+    }).join("");
+  }
+  $("creditList").addEventListener("click", function (e) {
+    var b = e.target.closest('[data-act="settle"]'); if (b) openSettleModal(b.closest(".card").getAttribute("data-id"));
+  });
+  function openSettleModal(saleId) {
+    var sale = state.saleMap[saleId]; if (!sale) return;
+    state.pendingSettleSale = sale;
+    var remaining = sale.total - (sale.creditPaid || 0);
+    $("settleCustomerLabel").textContent = "ลูกค้า: " + (sale.customerName || "ไม่ระบุ");
+    $("settleRemainingAmt").textContent = "ค้างอยู่ " + money(remaining);
+    $("fSettleAmount").value = remaining;
+    $("settleModalOverlay").classList.add("open");
+  }
+  $("cancelSettleBtn").addEventListener("click", function () { $("settleModalOverlay").classList.remove("open"); });
+  $("confirmSettleBtn").addEventListener("click", function () {
+    var amount = parseFloat($("fSettleAmount").value) || 0;
+    if (amount <= 0) { toastError("กรุณากรอกจำนวนเงิน"); return; }
+    var btn = this; btn.disabled = true;
+    apiCall({ action: "settleCredit", saleId: state.pendingSettleSale.id, amount: amount }).then(function () {
+      soundSuccess(); toast("รับชำระเงินแล้ว"); $("settleModalOverlay").classList.remove("open"); return refreshAll(true);
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  });
+
+  // ---------------- deliveries ----------------
+  var STATUS_LABEL = { pending: "รอส่ง", dispatched: "กำลังส่ง", delivered: "ส่งแล้ว", cancelled: "ยกเลิก" };
+  var STATUS_CLASS = { pending: "orange", dispatched: "blue", delivered: "green", cancelled: "red" };
+
+  document.querySelectorAll("#deliveryChips .chip").forEach(function (c) {
+    c.addEventListener("click", function () { state.deliveryFilter = c.getAttribute("data-dfilter"); renderDeliveries(); });
+  });
+
+  function renderDeliveries() {
+    var f = state.deliveryFilter;
+    document.querySelectorAll("#deliveryChips .chip").forEach(function (c) {
+      var k = c.getAttribute("data-dfilter");
+      c.classList.toggle("active", k === f);
+      var n = k === "all" ? state.deliveries.length : state.deliveries.filter(function (d) { return d.status === k; }).length;
+      var base = { pending: "รอส่ง", dispatched: "กำลังส่ง", delivered: "ส่งแล้ว", all: "ทั้งหมด" }[k];
+      c.textContent = base + (k === "delivered" || k === "all" ? "" : " (" + n + ")");
+    });
+    var list = state.deliveries.filter(function (d) { return f === "all" || d.status === f; });
+    if (f === "pending" || f === "dispatched") list.sort(function (a, b) { return ms(a.createdAt) - ms(b.createdAt); });
+    var box = $("deliveryList"), empty = $("deliveryEmptyState");
+    if (list.length === 0) { box.innerHTML = ""; empty.style.display = "block"; empty.innerHTML = f === "pending" ? "ไม่มีออเดอร์ที่รอส่ง" : "ไม่มีรายการ"; return; }
+    empty.style.display = "none";
+    box.innerHTML = list.slice(0, 100).map(function (d) {
+      var sale = state.saleMap[d.saleId];
+      var items = sale ? (sale.items || []).map(function (it) { return esc(it.name) + " x" + it.qty; }).join(", ") : "-";
+      var balance = sale && sale.creditStatus === "unpaid" ? sale.total - (sale.creditPaid || 0) : 0;
+      var addr = (d.village ? d.village + " " : "") + d.address;
+      var map = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(addr);
+      var actions = "";
+      if (d.status === "pending") actions += '<button class="small-btn primary" data-act="dispatch">🚚 ออกส่ง</button>';
+      if (d.status === "dispatched") actions += '<button class="small-btn primary" data-act="deliver">✅ ส่งถึงแล้ว</button>';
+      if (balance > 0 && d.status !== "cancelled") actions += '<button class="small-btn" data-act="settle">💵 รับชำระ ' + money(balance) + '</button>';
+      if (d.status === "pending" || d.status === "dispatched") actions += '<button class="small-btn danger" data-act="cancel">ยกเลิก</button>';
+      return '<div class="card" data-id="' + esc(d.id) + '"><div class="card-top"><div>' +
+        '<div class="c-title">' + esc(d.customerName || "ลูกค้า") + ' · <a href="tel:' + esc(d.phone) + '">' + esc(d.phone) + '</a></div>' +
+        '<div class="c-meta">📍 <a href="' + map + '" target="_blank" rel="noopener">' + esc(addr) + '</a>' + (d.distanceKm ? ' · ' + d.distanceKm + ' กม.' : '') + '</div>' +
+        '<div class="c-meta">🛒 ' + items + '</div>' +
+        (d.note ? '<div class="c-meta">📝 ' + esc(d.note) + '</div>' : '') +
+        '<div class="c-meta">สั่งเมื่อ ' + fmtDT(d.createdAt) + (d.dispatchedAt ? '<br>🚚 ออกส่ง ' + fmtDT(d.dispatchedAt) : '') + (d.deliveredAt ? '<br>✅ ส่งถึง ' + fmtDT(d.deliveredAt) : '') + '</div>' +
+        (d.vehicle ? '<div class="c-meta">🚗 รถ: <b>' + esc(d.vehicle) + '</b>' + (d.driver ? ' · คนขับ ' + esc(d.driver) : '') + '</div>' : '') +
+        '<span class="badge ' + STATUS_CLASS[d.status] + '">' + STATUS_LABEL[d.status] + '</span>' +
+        (balance > 0 ? '<span class="badge orange">ค้างชำระ ' + money(balance) + ' (เก็บปลายทาง)</span>' : (sale ? '<span class="badge green">ชำระครบ</span>' : '')) +
+        '</div><div class="c-amt">ค่าส่ง<br>' + money(d.deliveryFee) + '</div></div>' +
+        (actions ? '<div class="row-actions">' + actions + '</div>' : '') + '</div>';
+    }).join("");
+  }
+  $("deliveryList").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var id = b.closest(".card").getAttribute("data-id"), act = b.getAttribute("data-act");
+    var d = state.deliveries.find(function (x) { return x.id === id; }); if (!d) return;
+    if (act === "dispatch") openDispatchModal(d);
+    else if (act === "deliver") askConfirm("ยืนยันส่งถึงแล้ว", "ส่งของให้ " + (d.customerName || "ลูกค้า") + " เรียบร้อยแล้วใช่หรือไม่", "ส่งถึงแล้ว", function () {
+      apiCall({ action: "updateDelivery", id: id, status: "delivered" }).then(function () { soundSuccess(); toast("บันทึกส่งถึงแล้ว"); return refreshAll(true); }).catch(fail);
+    }, false);
+    else if (act === "cancel") askConfirm("ยกเลิกการจัดส่ง", "ยกเลิกออเดอร์ส่งของของ " + (d.customerName || "ลูกค้า") + "?\n(บิลขายยังอยู่ หากต้องการคืนเงิน/คืนสินค้า ให้ทำที่หน้ารายงาน)", "ยกเลิกส่ง", function () {
+      apiCall({ action: "updateDelivery", id: id, status: "cancelled" }).then(function () { toast("ยกเลิกแล้ว"); return refreshAll(true); }).catch(fail);
+    }, true);
+    else if (act === "settle") openSettleModal(d.saleId);
+  });
+
+  function vehicleOptions() {
+    var cnt = {};
+    state.deliveries.forEach(function (d) { if (d.vehicle) cnt[d.vehicle] = (cnt[d.vehicle] || 0) + 1; });
+    return Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; });
+  }
+  function openDispatchModal(d) {
+    state.dispatchDelivery = d;
+    $("dispatchCustomer").textContent = (d.customerName || "ลูกค้า") + " · " + (d.village ? d.village + " " : "") + d.address;
+    var opts = vehicleOptions();
+    $("vehicleChips").innerHTML = opts.map(function (v) { return '<button type="button" class="chip" data-vehicle="' + esc(v) + '">🚗 ' + esc(v) + '</button>'; }).join("");
+    $("fVehicle").value = ""; $("fDriver").value = "";
+    $("dispatchModalOverlay").classList.add("open");
+  }
+  $("vehicleChips").addEventListener("click", function (e) {
+    var c = e.target.closest("[data-vehicle]"); if (c) $("fVehicle").value = c.getAttribute("data-vehicle");
+  });
+  $("cancelDispatchBtn").addEventListener("click", function () { $("dispatchModalOverlay").classList.remove("open"); });
+  $("confirmDispatchBtn").addEventListener("click", function () {
+    var vehicle = $("fVehicle").value.trim();
+    if (!vehicle) { toastError("กรุณาระบุรถที่ใช้ส่ง"); return; }
+    var btn = this; btn.disabled = true;
+    apiCall({ action: "updateDelivery", id: state.dispatchDelivery.id, status: "dispatched", vehicle: vehicle, driver: $("fDriver").value.trim() }).then(function () {
+      $("dispatchModalOverlay").classList.remove("open"); soundSuccess(); toast("บันทึกออกส่งแล้ว"); return refreshAll(true);
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  });
+
+  // ---------------- attendance ----------------
+  function openRecord(name) { return state.attendance.find(function (a) { return a.employeeName === name && !a.clockOut; }); }
+
+  function renderAttendance() {
+    var now = Date.now(), sod = startOfDay(new Date()).getTime();
+    var nowD = new Date(), som = new Date(nowD.getFullYear(), nowD.getMonth(), 1).getTime();
+    var emps = activeEmployees();
+    var roster = $("attRoster");
+    if (emps.length === 0) roster.innerHTML = '<div class="empty-state" style="padding:16px;">ยังไม่มีรายชื่อพนักงาน<br>เพิ่มชื่อพนักงานด้านบนได้เลย</div>';
+    else roster.innerHTML = emps.map(function (e) {
+      var open = openRecord(e.name);
+      var todays = state.attendance.filter(function (a) { return a.employeeName === e.name && ms(a.clockIn) >= sod; });
+      var hoursMs = todays.reduce(function (sum, a) { return sum + ((a.clockOut ? ms(a.clockOut) : now) - ms(a.clockIn)); }, 0);
+      var st, cls, btn;
+      if (open) {
+        var el = now - ms(open.clockIn), long = el > 14 * 3600000;
+        st = "🟢 กำลังทำงาน · เข้า " + fmtTime(open.clockIn) + " (" + fmtDur(el) + ")" + (long ? " ⚠ นานผิดปกติ ลืมออกงานหรือไม่?" : "");
+        cls = long ? "warn" : "working";
+        btn = '<button class="small-btn danger" data-act="out">⏹ ออกงาน</button>';
+      } else if (todays.length) {
+        st = "✅ มาทำงานแล้ว · รวมวันนี้ " + fmtDur(hoursMs); cls = "done";
+        btn = '<button class="small-btn primary" data-act="in">▶ เข้างานอีกครั้ง</button>';
+      } else { st = "⚪ ยังไม่มาทำงานวันนี้"; cls = "absent"; btn = '<button class="small-btn primary" data-act="in">▶ เข้างาน</button>'; }
+      return '<div class="breakdown-row att-row" data-name="' + esc(e.name) + '" data-id="' + esc(e.id) + '"><div class="att-info"><div style="font-weight:700;">' + esc(e.name) + '</div><div class="att-status ' + cls + '">' + st + '</div></div>' + btn +
+        '<button class="icon-btn" data-act="delemp" title="ลบออกจากรายชื่อ" style="width:32px;height:32px;">🗑</button></div>';
+    }).join("");
+
+    var month = $("attMonthList");
+    if (emps.length === 0) month.innerHTML = '<div class="breakdown-row"><span>ยังไม่มีข้อมูล</span></div>';
+    else month.innerHTML = emps.map(function (e) {
+      var recs = state.attendance.filter(function (a) { return a.employeeName === e.name && ms(a.clockIn) >= som; });
+      var total = recs.reduce(function (sum, a) { return sum + ((a.clockOut ? ms(a.clockOut) : now) - ms(a.clockIn)); }, 0);
+      var days = uniq(recs.map(function (a) { return new Date(a.clockIn).toDateString(); })).length;
+      return '<div class="breakdown-row"><span>' + esc(e.name) + ' (' + days + ' วัน)</span><span class="br-val">' + fmtDur(total) + '</span></div>';
+    }).join("");
+
+    var hist = $("attHistory");
+    hist.innerHTML = state.attendance.length === 0 ? '<div class="breakdown-row"><span>ยังไม่มีประวัติ</span></div>' : state.attendance.slice(0, 40).map(function (a) {
+      var dur = a.clockOut ? fmtDur(ms(a.clockOut) - ms(a.clockIn)) : "ยังทำงานอยู่";
+      var day = new Date(a.clockIn).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+      return '<div class="breakdown-row att-row" data-id="' + esc(a.id) + '"><div class="att-info"><div style="font-weight:700;">' + esc(a.employeeName) + ' · ' + esc(day) + '</div>' +
+        '<div class="att-status absent">' + fmtTime(a.clockIn) + ' → ' + (a.clockOut ? fmtTime(a.clockOut) : "-") + ' · ' + dur + '</div></div>' +
+        '<button class="icon-btn" data-act="edit" style="width:32px;height:32px;">✎</button><button class="icon-btn" data-act="del" style="width:32px;height:32px;">🗑</button></div>';
+    }).join("");
+  }
+  setInterval(function () { if (state.activeView === "attendance" || state.activeView === "sell") { renderAttendance(); renderShopBar(); } }, 60000);
+
+  $("addEmpBtn").addEventListener("click", function () {
+    var name = $("newEmpName").value.trim(); if (!name) { toastError("กรุณากรอกชื่อพนักงาน"); return; }
+    apiCall({ action: "addEmployee", name: name }).then(function () { $("newEmpName").value = ""; toast("เพิ่มพนักงานแล้ว"); return refreshAll(true); }).catch(fail);
+  });
+  $("attRoster").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var row = b.closest(".att-row"), name = row.getAttribute("data-name"), act = b.getAttribute("data-act");
+    if (act === "in") apiCall({ action: "clockIn", employeeName: name }).then(function () { soundSuccess(); toast(name + " เข้างานแล้ว"); return refreshAll(true); }).catch(fail);
+    else if (act === "out") apiCall({ action: "clockOut", employeeName: name }).then(function () { soundSuccess(); toast(name + " ออกงานแล้ว"); return refreshAll(true); }).catch(fail);
+    else if (act === "delemp") askConfirm("ลบออกจากรายชื่อ", "ลบ \"" + name + "\" ออกจากรายชื่อพนักงาน? (ประวัติเข้า-ออกงานเดิมยังอยู่)", "ลบ", function () {
+      apiCall({ action: "removeEmployee", id: row.getAttribute("data-id") }).then(function () { return refreshAll(true); }).catch(fail);
+    }, true);
+  });
+  $("attHistory").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var id = b.closest(".att-row").getAttribute("data-id"), act = b.getAttribute("data-act");
+    var rec = state.attendance.find(function (a) { return a.id === id; }); if (!rec) return;
+    if (act === "edit") {
+      state.editingAttendanceId = id;
+      $("attEditName").textContent = rec.employeeName;
+      $("fAttIn").value = toLocalInput(new Date(rec.clockIn)); $("fAttOut").value = rec.clockOut ? toLocalInput(new Date(rec.clockOut)) : "";
+      $("attEditOverlay").classList.add("open");
+    } else if (act === "del") askConfirm("ลบรายการ", "ลบบันทึกเวลาทำงานของ " + rec.employeeName + " ใช่หรือไม่", "ลบ", function () {
+      apiCall({ action: "deleteAttendance", id: id }).then(function () { return refreshAll(true); }).catch(fail);
+    }, true);
+  });
+  $("cancelAttEditBtn").addEventListener("click", function () { $("attEditOverlay").classList.remove("open"); });
+  $("saveAttEditBtn").addEventListener("click", function () {
+    var inV = $("fAttIn").value; if (!inV) { toastError("กรุณาระบุเวลาเข้างาน"); return; }
+    var outV = $("fAttOut").value;
+    apiCall({ action: "updateAttendance", id: state.editingAttendanceId, clockIn: new Date(inV).toISOString(), clockOut: outV ? new Date(outV).toISOString() : "" }).then(function () {
+      $("attEditOverlay").classList.remove("open"); toast("แก้ไขแล้ว"); return refreshAll(true);
+    }).catch(fail);
+  });
+
+  // ---------------- payroll ----------------
+  $("addPayrollBtn").addEventListener("click", function () {
+    var name = $("plName").value.trim(), amount = parseFloat($("plAmount").value) || 0, note = $("plNote").value.trim();
+    if (!name) { toastError("กรุณากรอกชื่อพนักงาน"); return; }
+    if (amount <= 0) { toastError("กรุณากรอกจำนวนเงิน"); return; }
+    var btn = this; btn.disabled = true;
+    apiCall({ action: "addPayroll", employeeName: name, amount: amount, note: note }).then(function () {
+      toast("บันทึกการจ่ายค่าจ้างแล้ว"); $("plName").value = ""; $("plAmount").value = ""; $("plNote").value = ""; return refreshAll(true);
+    }).catch(fail).finally(function () { btn.disabled = false; });
+  });
+  function renderPayrollList() {
+    var mstart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+    $("payrollMonthTotal").textContent = money(state.payroll.filter(function (p) { return ms(p.timestamp) >= mstart; }).reduce(function (a, p) { return a + p.amount; }, 0));
+    var box = $("payrollList"), empty = $("payrollEmptyState");
+    if (state.payroll.length === 0) { box.innerHTML = ""; empty.style.display = "block"; empty.innerHTML = "ยังไม่มีประวัติการจ่ายค่าจ้าง"; return; }
+    empty.style.display = "none";
+    box.innerHTML = state.payroll.slice(0, 100).map(function (p) {
+      return '<div class="card" data-id="' + esc(p.id) + '"><div class="card-top"><div><div class="c-title">' + esc(p.employeeName) + '</div>' +
+        '<div class="c-meta">' + fmtDT(p.timestamp) + (p.note ? " · " + esc(p.note) : "") + '</div></div>' +
+        '<div style="display:flex;gap:8px;align-items:center;"><div class="c-amt negative">' + money(p.amount) + '</div><button class="icon-btn" data-act="del">🗑</button></div></div></div>';
+    }).join("");
+  }
+  $("payrollList").addEventListener("click", function (e) {
+    var b = e.target.closest('[data-act="del"]'); if (!b) return;
+    var id = b.closest(".card").getAttribute("data-id");
+    askConfirm("ลบรายการ", "ลบบันทึกการจ่ายค่าจ้างนี้ใช่หรือไม่", "ลบ", function () {
+      apiCall({ action: "deletePayroll", id: id }).then(function () { toast("ลบรายการแล้ว"); return refreshAll(true); }).catch(fail);
+    }, true);
+  });
+
+  // ---------------- settings ----------------
+  function fillSettingsForm() {
+    $("setBaseFee").value = state.settings.deliveryBaseFee || ""; $("setBaseKm").value = state.settings.deliveryBaseKm || ""; $("setPerKm").value = state.settings.deliveryPerKm || "";
+  }
+  $("saveSettingsBtn").addEventListener("click", function () {
+    var btn = this; btn.disabled = true;
+    apiCall({ action: "saveSettings", settings: {
+      deliveryBaseFee: parseFloat($("setBaseFee").value) || 0, deliveryBaseKm: parseFloat($("setBaseKm").value) || 0, deliveryPerKm: parseFloat($("setPerKm").value) || 0
+    } }).then(function () { toast("บันทึกการตั้งค่าแล้ว"); return refreshAll(true); }).catch(fail).finally(function () { btn.disabled = false; });
+  });
+
+  // ---------------- report ----------------
+  document.querySelectorAll("#reportChips .chip").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      document.querySelectorAll("#reportChips .chip").forEach(function (c) { c.classList.toggle("active", c === chip); });
+      state.reportRange = chip.getAttribute("data-range"); renderSalesReport();
+    });
+  });
+  function inRange(iso) {
+    var t = ms(iso), now = new Date();
+    if (state.reportRange === "today") return t >= startOfDay(now).getTime();
+    if (state.reportRange === "week") return t >= now.getTime() - 7 * 86400000;
+    return true;
+  }
+
+  function renderSalesReport() {
+    var filtered = state.sales.filter(function (s) { return inRange(s.timestamp); });
+    var salesOnly = filtered.filter(function (s) { return s.type !== "return"; });
+    var revenue = filtered.reduce(function (a, s) { return a + s.total; }, 0);
+    var profit = filtered.reduce(function (a, s) { return a + (s.profit || 0); }, 0);
+    var bills = salesOnly.length;
+    var avg = bills ? salesOnly.reduce(function (a, s) { return a + s.total; }, 0) / bills : 0;
+    var outstanding = salesOnly.filter(function (s) { return s.creditStatus === "unpaid"; }).reduce(function (a, s) { return a + (s.total - (s.creditPaid || 0)); }, 0);
+    var fees = salesOnly.reduce(function (a, s) { return a + (s.deliveryFee || 0); }, 0);
+    $("sumRevenue").textContent = money(revenue);
+    var pe = $("sumProfit"); pe.textContent = money(profit); pe.classList.toggle("negative", profit < 0);
+    $("sumBills").textContent = bills; $("sumAvg").textContent = money(avg);
+    $("sumOutstanding").textContent = money(outstanding); $("sumDeliveryFee").textContent = money(fees);
+
+    var totals = {};
+    salesOnly.forEach(function (s) {
+      (s.items || []).forEach(function (it) {
+        var t = totals[it.name] || (totals[it.name] = { qty: 0, revenue: 0 });
+        t.qty += it.qty || 0; t.revenue += it.subtotal != null ? it.subtotal : it.price * it.qty;
+      });
+    });
+    var top = Object.keys(totals).map(function (n) { return { name: n, qty: totals[n].qty, revenue: totals[n].revenue }; }).sort(function (a, b) { return b.qty - a.qty; }).slice(0, 5);
+    $("topProductsList").innerHTML = top.length === 0 ? '<div class="breakdown-row"><span>ยังไม่มีข้อมูล</span></div>' :
+      top.map(function (p) { return '<div class="breakdown-row"><span>' + esc(p.name) + ' (' + p.qty + ' หน่วย)</span><span class="br-val">' + money(p.revenue) + '</span></div>'; }).join("");
+
+    var vt = {};
+    state.deliveries.forEach(function (d) {
+      if (!d.vehicle || !d.dispatchedAt || !inRange(d.dispatchedAt)) return;
+      var v = vt[d.vehicle] || (vt[d.vehicle] = { n: 0, fee: 0 }); v.n++; v.fee += d.deliveryFee || 0;
+    });
+    var vk = Object.keys(vt).sort(function (a, b) { return vt[b].n - vt[a].n; });
+    $("vehicleBreakdownList").innerHTML = vk.length === 0 ? '<div class="breakdown-row"><span>ยังไม่มีข้อมูลการจัดส่ง</span></div>' :
+      vk.map(function (v) { return '<div class="breakdown-row"><span>🚗 ' + esc(v) + ' (' + vt[v].n + ' เที่ยว)</span><span class="br-val">' + money(vt[v].fee) + '</span></div>'; }).join("");
+
+    var listEl = $("salesList"), emptyEl = $("reportEmptyState");
+    if (filtered.length === 0) { listEl.innerHTML = ""; emptyEl.style.display = "block"; emptyEl.innerHTML = "ยังไม่มียอดขายในช่วงนี้"; return; }
+    emptyEl.style.display = "none";
+    listEl.innerHTML = filtered.slice(0, 150).map(function (s) {
+      var count = (s.items || []).reduce(function (a, it) { return a + (it.qty || 0); }, 0), isReturn = s.type === "return";
+      var pay = s.paymentMethod === "cash" ? "เงินสด" : s.paymentMethod === "qr" ? "สแกนจ่าย" : s.paymentMethod === "credit" ? "ค้างทั้งหมด" : "";
+      var badges = "";
+      if (s.pending) badges += '<span class="badge orange">⏳ รอซิงค์</span>';
+      if (isReturn) badges += '<span class="badge red">คืนสินค้า</span>';
+      if (s.deliveryId) badges += '<span class="badge blue">🚚 จัดส่ง</span>';
+      if (s.creditStatus === "unpaid") badges += '<span class="badge orange">ค้างชำระ ' + money(s.total - (s.creditPaid || 0)) + '</span>';
+      if (s.creditStatus === "paid") badges += '<span class="badge green">ชำระครบแล้ว</span>';
+      var actions = "";
+      if (!isReturn) {
+        actions = '<div class="row-actions"><button class="small-btn" data-act="reprint">🖨 พิมพ์ซ้ำ</button>' +
+          (s.pending ? "" : '<button class="small-btn" data-act="return">↩️ คืนสินค้า</button>') + '</div>';
+      }
+      return '<div class="card" data-id="' + esc(s.id) + '"><div class="card-top"><div>' +
+        '<div class="c-title">' + fmtDT(s.timestamp) + (s.customerName ? " · " + esc(s.customerName) : "") + '</div>' +
+        '<div class="c-meta">' + count + ' รายการสินค้า' + (pay ? " · " + pay : "") + (s.deliveryFee ? " · ค่าส่ง " + money(s.deliveryFee) : "") + '</div>' + badges +
+        '</div><div class="c-amt' + (s.total < 0 ? " negative" : "") + '">' + money(s.total) + '</div></div>' + actions + '</div>';
+    }).join("");
+  }
+  $("salesList").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]"); if (!b) return;
+    var id = b.closest(".card").getAttribute("data-id"), sale = state.saleMap[id]; if (!sale) return;
+    if (b.getAttribute("data-act") === "reprint") printReceipt(receiptFromSale(sale));
+    else openReturnModal(id);
+  });
+
+  // ---------------- boot ----------------
+  $("dateLabel").textContent = new Date().toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  renderCart();
+  state.pendingSales = loadQueue();
+  function boot() {
+    // แสดงข้อมูลที่แคชไว้ก่อนทันที (ไม่ต้องรอเน็ต) แล้วค่อยซิงค์ของจริงทับ
+    var cached = loadCache();
+    if (cached) {
+      applyCache(cached);
+      renderAll();
+      if (!isOnline()) {
+        updateConnectionBadge();
+        var b = $("offlineBanner");
+        b.className = "banner show offline-mode";
+        b.textContent = "📴 ออฟไลน์ — แสดงข้อมูลล่าสุดเมื่อ " + fmtDT(cached.savedAt) + " การขายใหม่จะบันทึกไว้ในเครื่องและซิงค์อัตโนมัติเมื่อมีอินเทอร์เน็ต";
+      }
+    }
+    refreshAll(!!cached);
+    if (state.pollTimer) clearInterval(state.pollTimer);
+    state.pollTimer = setInterval(function () { if (!state.refreshing) refreshAll(true); }, 20000);
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && sb && !state.refreshing) refreshAll(true); });
+  if (state.supabaseUrl && state.supabaseKey) { buildClient(); showApp(); boot(); } else showSetup();
+})();
+</script>
+</body>
+</html>
